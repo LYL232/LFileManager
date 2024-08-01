@@ -83,8 +83,6 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         assert tag is None or 0 < len(tag) <= 255, OperationError('管理标识允许的最大长度为255')
         assert isdir(dir_path), OperationError(f'{dir_path}不是一个目录')
 
-        dir_path = abspath(dir_path)
-
         dir_id = self.maintain_management(dir_path, name, tag)
 
         # 获取当前目录的所有文件信息记录
