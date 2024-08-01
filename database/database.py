@@ -1,3 +1,4 @@
+import decimal
 import pymysql
 from pymysql.err import ProgrammingError
 from pymysql import Connection
@@ -293,6 +294,14 @@ class Database(metaclass=ABCMeta):
         根据id列表查询指定的目录记录
         :param dir_ids: 需要查询的目录id
         :return: [dir_ids] -> DirectoryRecord
+        """
+
+    @abstractmethod
+    def query_director_size(self, dir_id: int) -> int:
+        """
+        查询目录的大小
+        :param dir_id: 目录id
+        :return: 大小（字节）
         """
 
 
@@ -792,3 +801,18 @@ class MysqlDataBase(Database):
                     records[record.dir_id] = record
                 begin = end
             return records
+
+    def query_director_size(self, dir_id: int) -> int:
+        """
+        查询目录的大小
+        :param dir_id: 目录id
+        :return: 大小（字节）
+        """
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT SUM(`size`) FROM file WHERE dir_id = %s;
+                """,
+                (dir_id,)
+            )
+            return int(cursor.fetchone()[0])

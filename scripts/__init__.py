@@ -9,6 +9,7 @@ from .common import (
     QueryFileRecordScript,
     DumpDatabaseScript,
     QueryRedundantFileScript,
+    QuerySizeScript
 )
 
 SCRIPTS = {
@@ -20,6 +21,7 @@ SCRIPTS = {
     'rm': RemoveDirectoryScript,
     'ls': QueryDirectoryScript,
     'fr': QueryFileRecordScript,
+    'size': QuerySizeScript,
     'dump_db': DumpDatabaseScript,
     'qrf': QueryRedundantFileScript,
 }

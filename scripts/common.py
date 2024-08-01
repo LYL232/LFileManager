@@ -506,22 +506,14 @@ class QueryFileRecordScript(DataBaseScript):
     def __call__(self, name: str = None, *args) -> int:
         """
         查询所有被管理的目录的脚本
-        :param directory: 目录名字，如果为空，则从当前目录下的.lyl232fm的信息获取
+        :param name: 目录名字，如果为空，则从当前目录下的.lyl232fm的信息获取
         :param args: 其他参数，应为空
         :return: 0表示执行正常
         """
         self.check_empty_args(*args)
         self.init_db_if_needed()
+        dir_id = self.get_directory_id_by_name_or_local(name)
         # TODO 限制输出条目数
-        if name is None:
-            try:
-                name = self.load_manage_info(abspath('.'))['name']
-            except (JSONDecodeError, FileNotFoundError) as e:
-                print(e)
-                raise OperationError(f'请指定查询的目录名字')
-        dir_id = self.db.directory_id(name)
-        assert dir_id is not None, OperationError(f'目录名字{name}不存在于数据库中，无法操作')
-
         for record in self.db.file_records(dir_id):
             path = f'{record.dir_path[1:]}{record.name}{record.suffix}'
             print(f'{path}\t{self.human_readable_size(record.size)}\t{record.modified_date}')
@@ -689,3 +681,16 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
                 break
             else:
                 print(f'无法识别命令：{inputs}')
+
+
+class QuerySizeScript(DataBaseScript):
+    def __call__(self, name: str = None, *args) -> int:
+        """
+        查询所有被管理的目录的脚本
+        :param name: 目录名字，如果为空，则从当前目录下的.lyl232fm的信息获取
+        :param args: 其他参数，应为空
+        :return: 0表示执行正常
+        """
+        self.check_empty_args(*args)
+        print(self.human_readable_size(self.db.query_director_size(self.get_directory_id_by_name_or_local(name))))
+        return 0

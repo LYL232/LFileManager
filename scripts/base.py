@@ -1,13 +1,14 @@
 from abc import abstractmethod, ABCMeta
 from typing import Union, List
 import json
+from json.decoder import JSONDecodeError
 import os
-from os.path import join, dirname, exists, isdir
+from os.path import join, dirname, exists, isdir, abspath
 import time
 from tqdm import tqdm
 
 from database import DATABASE_CLASS, Database
-from error import ArgumentError, CodingError, RunTimeError
+from error import ArgumentError, CodingError, RunTimeError, OperationError
 from record import FileRecord
 
 
@@ -235,6 +236,23 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
         except Exception as e:
             transaction.rollback()
             raise e
+
+    def get_directory_id_by_name_or_local(self, name: str = None):
+        """
+        通过输入的name参数或者本地的.lyl232fm文件夹里的信息获取目录id
+        :param name: 目录名字
+        :return: 目录id如果获取不到会抛出异常
+        """
+        self.init_db_if_needed()
+        if name is None:
+            try:
+                name = self.load_manage_info(abspath('.'))['name']
+            except (JSONDecodeError, FileNotFoundError) as e:
+                print(e)
+                raise OperationError(f'请指定查询的目录名字')
+        dir_id = self.db.directory_id(name)
+        assert dir_id is not None, OperationError(f'目录名字{name}不存在于数据库中，无法操作')
+        return dir_id
 
 
 class FileMD5ComputingScript(DataBaseScript, metaclass=ABCMeta):
