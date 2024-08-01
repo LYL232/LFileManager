@@ -1,0 +1,5 @@
+#! /bin/bash
+
+LYL232FM_DIR=$(dirname "$0")
+
+python "${LYL232FM_DIR}"/run.py "$@" --database_config="${LYL232FM_DIR}"/database_config.json

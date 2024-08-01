@@ -1,0 +1,9 @@
+.idea
+.lyl232fm
+__pycache__
+
+mysql
+tmp*
+
+*.json
+!db_config.json
