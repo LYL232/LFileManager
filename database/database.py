@@ -1,4 +1,3 @@
-import decimal
 import pymysql
 from pymysql.err import ProgrammingError
 from pymysql import Connection
@@ -13,8 +12,8 @@ ALL_TABLES = {
         'mysql': """
             CREATE TABLE directory (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-                des VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+                name VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+                des VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
                 UNIQUE directory_name_index(`name`)
             );
         """,
@@ -22,8 +21,8 @@ ALL_TABLES = {
     'management': {
         'mysql': """
             CREATE TABLE management (
-                tag VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci PRIMARY KEY,
-                path VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+                tag VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin PRIMARY KEY,
+                path VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin DEFAULT NULL,
                 dir_id INT, 
                 INDEX management_dir_id_index(dir_id),
                 CONSTRAINT management_fk FOREIGN KEY (dir_id) REFERENCES directory(id)
@@ -34,9 +33,9 @@ ALL_TABLES = {
         'mysql': """
             CREATE TABLE file (
                 id BIGINT AUTO_INCREMENT PRIMARY KEY, 
-                dir_path VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-                name VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
-                suffix VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+                dir_path VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+                name VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
+                suffix VARCHAR (255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin NOT NULL,
                 md5 CHAR(32) DEFAULT NULL,
                 size BIGINT NOT NULL,
                 dir_id INT NOT NULL,
