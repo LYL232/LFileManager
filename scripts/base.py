@@ -93,7 +93,8 @@ class BaseScript(metaclass=ABCMeta):
                 line = line.strip()
                 if len(line) == 0:
                     continue
-                res.append(line.split(','))
+                # 改用反斜杠，因为不会出现在数据库里而逗号会
+                res.append(line.split('\\'))
         return res
 
     @staticmethod
@@ -106,11 +107,13 @@ class BaseScript(metaclass=ABCMeta):
         """
         headers = headers or []
         with open(path, 'w', encoding='utf8') as file:
-            if len(headers) == 0:
-                file.write(','.join(headers) + '\n')
+            if len(headers) > 0:
+                # 使用反斜杠，因为不会出现在数据库里，而逗号会
+                file.write('\\'.join(headers) + '\n')
             for each in data:
                 assert len(each) == len(headers)
-                file.write(','.join([str(item) for item in each]) + '\n')
+                # 使用反斜杠，因为不会出现在数据库里，而逗号会
+                file.write('\\'.join([str(item) for item in each]) + '\n')
 
     @staticmethod
     def _write_manage_info(dir_path, name: str, tag: str):

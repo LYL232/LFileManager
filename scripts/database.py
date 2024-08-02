@@ -31,7 +31,8 @@ class InitializeDataBaseScript(DataBaseScript):
             ManagementRecord(
                 dir_id=int(dir_id),
                 tag=tag,
-                path=path
+                # 在文件中的反斜杠路径为正斜杠，得替换回来
+                path=path.replace('/', os.path.sep)
             )
             for tag, path, dir_id in self.read_csv(join(dumped_data_path, 'management.csv'), True)
         ]
@@ -84,7 +85,7 @@ class ClearDataBaseScript(DataBaseScript):
             return 0
         while True:
             inputs = input(
-                '在删除前，将会导出所有数据到一个目录，请指定那个目录，并且确认那个目录不存在，默认为当前目录的.lyl232fm/dumped_data'
+                '在删除前，将会导出所有数据到一个目录，请指定那个目录，并且确认那个目录不存在，默认为当前目录的.lyl232fm/dumped_data\n'
             )
             if inputs == '':
                 inputs = join(abspath('.'), '.lyl232fm')
@@ -93,8 +94,9 @@ class ClearDataBaseScript(DataBaseScript):
             if exists(inputs):
                 print(f'路径{inputs}已经存在，请重新输入。')
                 continue
-            if not exists(dirname(inputs)):
-                os.makedirs(inputs, exist_ok=True)
+            dir_path = abspath(dirname(inputs))
+            if not exists(dir_path):
+                os.makedirs(dir_path, exist_ok=True)
             dump_script(inputs)
             break
         self.db.clear()

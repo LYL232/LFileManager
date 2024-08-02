@@ -532,7 +532,14 @@ class DumpDatabaseScript(DataBaseScript):
         )
         self.write_csv(
             join(out_dir, 'management.csv'),
-            [(record.tag, record.path, record.dir_id) for record in self.db.all_managements()],
+            [
+                (
+                    record.tag,
+                    record.path.replace('\\', '/'),  # 将反斜杠换成正斜杠
+                    record.dir_id
+                )
+                for record in self.db.all_managements()
+            ],
             headers=['tag', 'path', 'dir_id']
         )
         self.write_csv(
