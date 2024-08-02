@@ -194,13 +194,13 @@ class ManageDirectoryScript(FileMD5ComputingScript):
 
         while True:
             inputs = input(
-                f'本地相较数据库中缺失{len(unique_paths)}条文件记录，对于这些文件记录的可选操作如下：\n'
+                f'数据库相较本地中缺失{len(unique_paths)}条文件记录，对于这些文件记录的可选操作如下：\n'
                 'a：将这些文件记录更新到数据库中\n'
                 'b：【注意！】删除本地的这些文件\n'
-                'ls: 列出这些文件的目录路径\n'
+                'ls [写入文件路径]: 列出这些文件的目录路径 [写入指定的文件中]\n'
                 'exit: 无视并不再询问\n'
                 '其他输入将被视为无效输入并将继续询问\n'
-            )
+            ).strip()
             if inputs == 'a':
                 file_records = [local_records[each] for each in unique_paths]
                 if self.input_query(
@@ -220,9 +220,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 for path in unique_paths:
                     self.remove_single_file(join(dir_path, *(path.split('/')[1:])))
                 break
-            elif inputs == 'ls':
-                for each in sorted(list(unique_paths)):
-                    print(each)
+            elif inputs.startswith('ls'):
+                self.cmd_ls(inputs, sorted(list(unique_paths)))
             elif inputs == 'exit':
                 break
             else:
@@ -251,10 +250,10 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 f'本地相较数据库中缺失{len(unique_paths)}条文件记录，对于这些文件记录的可选操作如下：\n'
                 'a：【注意！】删除所有数据库中的相关文件记录\n'
                 'b：尝试从其他同目录的受管理物理位置复制这些文件到本地\n'
-                'ls: 列出这些文件的目录路径\n'
+                'ls [写入文件路径]: 列出这些文件的目录路径 [写入指定的文件中]\n'
                 'exit: 无视并不再询问\n'
                 '其他输入将被视为无效输入并将继续询问\n'
-            )
+            ).strip()
             if inputs == 'a':
                 ids = [db_records[path].file_id for path in unique_paths]
                 assert all(each is not None for each in ids), CodingError('数据库中的文件记录中的文件id不应该为None')
@@ -270,9 +269,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             elif inputs == 'b':
                 self._unique_db_records_copy_from_others(dir_path, dir_id, unique_paths)
                 break
-            elif inputs == 'ls':
-                for each in sorted(list(unique_paths)):
-                    print(each)
+            elif inputs.startswith('ls'):
+                self.cmd_ls(inputs, sorted(list(unique_paths)))
             elif inputs == 'exit':
                 break
             else:
@@ -391,10 +389,10 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 f'【注意！】共有{len(path2records)}项本地文件记录的文件与数据库中相应记录冲突：请问需要作何处理？\n'
                 f'a：以本地文件记录覆盖数据库中的记录并计算md5值\n'
                 f'b：以本地文件记录覆盖数据库中的记录但不计算md5值\n'
-                f'ls: 列出这些文件的目录路径\n'
+                f'ls [写入文件路径]: 列出这些文件的目录路径 [写入指定的文件中]\n'
                 f'exit: 无视并不再询问\n'
                 '其他输入将被视为无效输入并将继续询问\n'
-            )
+            ).strip()
             if inputs == 'a':
                 for each in sorted(list(path2records.keys())):
                     print(each)
@@ -413,9 +411,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 updated = self.transaction(self.db.update_file_records, file_records=records)
                 print(f'更新了{updated}条数据库记录')
                 return
-            elif inputs == 'ls':
-                for each in sorted(list(path2records.keys())):
-                    print(each)
+            elif inputs.startswith('ls'):
+                self.cmd_ls(inputs, sorted(list(path2records.keys())))
             elif inputs == 'exit':
                 return
             else:
@@ -584,26 +581,28 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
             inputs = input(
                 f'共有{len(size2file_ids)}项文件记录至少与其他文件拥有相同的大小。请问需要作何处理？\n'
                 f'a：计算这些文件的md5值并存入数据库中，并找出冲突的文件\n'
-                f'ls: 列出这些文件的目录路径和大小\n'
+                f'ls [写入文件路径]: 列出这些文件的目录路径和大小 [写入指定的文件中]\n'
                 f'exit: 无视并不再询问\n'
                 '其他输入将被视为无效输入并将继续询问\n'
-            )
+            ).strip()
             if inputs == 'a':
                 updated = sum(self.file_md5_computing_transactions(
                     list(file_records.values()), self.db.update_file_records))
                 print(f'更新了{updated}条数据库记录')
                 break
-            elif inputs == 'ls':
+            elif inputs.startswith('ls'):
                 if all_directory is None:
                     all_directory_ids = set()
                     for record in file_records.values():
                         all_directory_ids.add(record.directory_id)
                     all_directory = self.db.query_directory_by_id(list(all_directory_ids))
+                outputs = []
                 for size, md5_ids in size2file_ids.items():
-                    print(f'大小: {self.human_readable_size(size)}')
+                    outputs.append(f'大小: {self.human_readable_size(size)}')
                     for file_id in md5_ids:
                         record = file_records[file_id]
-                        print(f'{all_directory[record.directory_id].name}:{file_records[file_id].path}')
+                        outputs.append(f'{all_directory[record.directory_id].name}:{file_records[file_id].path}')
+                self.cmd_ls(inputs, outputs)
             elif inputs == 'exit':
                 break
             else:
@@ -629,10 +628,10 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
             inputs = input(
                 f'共有{len(size_md5_to_file_records)}项文件记录至少与其他文件拥有相同的大小和md5值。请问需要作何处理？\n'
                 f'a：列出相冲突的文件并询问保留哪条冲突的记录\n'
-                f'ls: 列出这些文件的目录路径、大小和md5值\n'
+                f'ls [写入文件路径]: 列出这些文件的目录路径、大小和md5值 [写入指定的文件中]\n'
                 f'exit: 无视并不再询问\n'
                 '其他输入将被视为无效输入并将继续询问\n'
-            )
+            ).strip()
             if inputs == 'a':
                 for size, md5_dict in size_md5_to_file_records.items():
                     for md5, ids in md5_dict.items():
@@ -677,13 +676,15 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
                                 f'条文件记录'
                             )
                 break
-            elif inputs == 'ls':
+            elif inputs.startswith('ls'):
+                outputs = []
                 for size, md5_dict in size_md5_to_file_records.items():
                     for md5, ids in md5_dict.items():
-                        print(f'大小: {self.human_readable_size(size)}，md5：{md5}')
+                        outputs.append(f'大小: {self.human_readable_size(size)}，md5：{md5}')
                         for file_id in ids:
                             record = file_records[file_id]
-                            print(f'{all_directory[record.directory_id].name}:{file_records[file_id].path}')
+                            outputs.append(f'{all_directory[record.directory_id].name}:{file_records[file_id].path}')
+                self.cmd_ls(inputs, outputs)
             elif inputs == 'exit':
                 break
             else:

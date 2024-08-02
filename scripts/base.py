@@ -53,7 +53,7 @@ class BaseScript(metaclass=ABCMeta):
 
     @staticmethod
     def input_query(prompt: str):
-        inputs = input(f'{prompt}\n输入"yes"，"y"，"是"确认执行该动作：')
+        inputs = input(f'{prompt}\n输入"yes"，"y"，"是"确认执行该动作：').strip()
         if inputs == 'y' or inputs == 'yes' or inputs == '是':
             return True
         return False
@@ -196,6 +196,31 @@ class BaseScript(metaclass=ABCMeta):
             else:
                 res = False
         return res
+
+    @classmethod
+    def cmd_ls(cls, cmd: str, outputs: List[str]):
+        """
+        ls命令的处理：询问将字符串列表输出到命令行还是指定文件中
+        :param cmd 命令
+        :param outputs: 待输出的命令
+        :return: None
+        """
+        cmds = cmd.split(' ')
+        if len(cmds) > 1:
+            assert len(cmds) == 2, OperationError(f'ls命令只能接受一个参数，但是却收到了多个参数：{cmds[1:]}')
+            # 输出到指定文件
+            file_path = cmds[1]
+            assert not exists(file_path), OperationError(f'ls 将要输出的文件：{file_path}已经存在')
+            try:
+                with open(file_path, 'w', encoding='utf8') as file:
+                    for each in outputs:
+                        file.write(f'{each}\n')
+                print(f'已写入{file_path}')
+            except Exception as e:
+                OperationError(f'无法写入文件：{file_path}，原因是：{e}')
+        else:
+            for each in outputs:
+                print(each)
 
 
 class DataBaseScript(BaseScript, metaclass=ABCMeta):
