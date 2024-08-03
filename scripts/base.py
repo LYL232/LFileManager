@@ -209,18 +209,21 @@ class BaseScript(metaclass=ABCMeta):
         if len(cmds) > 1:
             assert len(cmds) == 2, OperationError(f'ls命令只能接受一个参数，但是却收到了多个参数：{cmds[1:]}')
             # 输出到指定文件
-            file_path = cmds[1]
-            assert not exists(file_path), OperationError(f'ls 将要输出的文件：{file_path}已经存在')
-            try:
-                with open(file_path, 'w', encoding='utf8') as file:
-                    for each in outputs:
-                        file.write(f'{each}\n')
-                print(f'已写入{file_path}')
-            except Exception as e:
-                OperationError(f'无法写入文件：{file_path}，原因是：{e}')
+            cls.write_lines_to_file(cmds[1], outputs)
         else:
             for each in outputs:
                 print(each)
+
+    @staticmethod
+    def write_lines_to_file(path: str, lines: List[str]):
+        assert not exists(path), OperationError(f'ls 将要输出的文件：{path}已经存在')
+        try:
+            with open(path, 'w', encoding='utf8') as file:
+                for each in lines:
+                    file.write(f'{each}\n')
+            print(f'已写入{path}')
+        except Exception as e:
+            OperationError(f'无法写入文件：{path}，原因是：{e}')
 
 
 class DataBaseScript(BaseScript, metaclass=ABCMeta):

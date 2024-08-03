@@ -500,7 +500,7 @@ class CancelManagementScript(SingleTransactionScript):
 
 
 class QueryFileRecordScript(DataBaseScript):
-    def __call__(self, name: str = None, *args) -> int:
+    def __call__(self, name: str = None, write_path: str = None, *args) -> int:
         """
         查询所有被管理的目录的脚本
         :param name: 目录名字，如果为空，则从当前目录下的.lyl232fm的信息获取
@@ -510,10 +510,15 @@ class QueryFileRecordScript(DataBaseScript):
         self.check_empty_args(*args)
         self.init_db_if_needed()
         dir_id = self.get_directory_id_by_name_or_local(name)
-        # TODO 限制输出条目数
+        outputs = []
         for record in self.db.file_records(dir_id):
             path = f'{record.dir_path[1:]}{record.name}{record.suffix}'
-            print(f'{path}\t{self.human_readable_size(record.size)}\t{record.modified_date}')
+            outputs.append(f'{path}\t{self.human_readable_size(record.size)}\t{record.modified_date}')
+        if write_path is not None:
+            self.write_lines_to_file(write_path, outputs)
+        else:
+            for each in outputs:
+                print(each)
         return 0
 
 
