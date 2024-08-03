@@ -7,6 +7,7 @@ from json.decoder import JSONDecodeError
 from typing import Set, Dict, Tuple, List
 from tqdm import tqdm
 import shutil
+from abc import abstractmethod, ABCMeta
 
 from scripts import DataBaseScript, SingleTransactionScript, FileMD5ComputingScript
 from error import OperationError, RunTimeError, CodingError
@@ -510,15 +511,8 @@ class QueryFileRecordScript(DataBaseScript):
         self.check_empty_args(*args)
         self.init_db_if_needed()
         dir_id = self.get_directory_id_by_name_or_local(name)
-        outputs = []
-        for record in self.db.file_records(dir_id):
-            path = f'{record.dir_path[1:]}{record.name}{record.suffix}'
-            outputs.append(f'{path}\t{self.human_readable_size(record.size)}\t{record.modified_date}')
-        if write_path is not None:
-            self.write_lines_to_file(write_path, outputs)
-        else:
-            for each in outputs:
-                print(each)
+        outputs = self.file_record_output_lines(self.db.file_records(dir_id))
+        self.write_or_output_lines_to_file(outputs, write_path)
         return 0
 
 
@@ -707,3 +701,51 @@ class QuerySizeScript(DataBaseScript):
         self.check_empty_args(*args)
         print(self.human_readable_size(self.db.query_director_size(self.get_directory_id_by_name_or_local(name))))
         return 0
+
+
+class FindInColumnScript(DataBaseScript, metaclass=ABCMeta):
+    def __call__(self, keyword: str, write_path: str = None, *args) -> int:
+        """
+        在文件记录的指定字段中查找keyword
+        :param keyword: 查找关键字
+        :param write_path: 输出文件路径
+        :param args: 其他参数，应为空
+        :return: 0表示执行正常
+        """
+        self.check_empty_args(*args)
+        outputs = self.file_record_output_lines(self.db.find_in_file_path(self._col_name(), keyword.strip()))
+        self.write_or_output_lines_to_file(outputs, write_path)
+        return 0
+
+    @abstractmethod
+    def _col_name(self) -> str:
+        """
+        :return: 需要查询的字段名称
+        """
+
+
+class FindInFileDirectorPathScript(FindInColumnScript):
+    """
+    在父目录路径里查找
+    """
+
+    def _col_name(self) -> str:
+        return 'dir_path'
+
+
+class FindInNameScript(FindInColumnScript):
+    """
+    在文件名里查找
+    """
+
+    def _col_name(self) -> str:
+        return 'name'
+
+
+class FindInSuffixScript(FindInColumnScript):
+    """
+    在后缀名利查找
+    """
+
+    def _col_name(self) -> str:
+        return 'suffix'

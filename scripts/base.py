@@ -206,16 +206,21 @@ class BaseScript(metaclass=ABCMeta):
         :return: None
         """
         cmds = cmd.split(' ')
-        if len(cmds) > 1:
-            assert len(cmds) == 2, OperationError(f'ls命令只能接受一个参数，但是却收到了多个参数：{cmds[1:]}')
-            # 输出到指定文件
-            cls.write_lines_to_file(cmds[1], outputs)
-        else:
-            for each in outputs:
-                print(each)
+        assert len(cmds) <= 2, OperationError(f'ls命令只能接受一个参数，但是却收到了多个参数：{cmds[1:]}')
+        cls.write_or_output_lines_to_file(outputs, cmds[1] if len(cmds) == 2 else None)
 
     @staticmethod
-    def write_lines_to_file(path: str, lines: List[str]):
+    def write_or_output_lines_to_file(lines: List[str], path: str = None):
+        """
+        将字符串列表输出到指定文件或者标准输出中
+        :param lines: 字符串列表
+        :param path: 写入的文件路径，如果为None则视为输出到控制台
+        :return: None
+        """
+        if path is None:
+            for each in lines:
+                print(each)
+            return
         assert not exists(path), OperationError(f'ls 将要输出的文件：{path}已经存在')
         try:
             with open(path, 'w', encoding='utf8') as file:
@@ -224,6 +229,19 @@ class BaseScript(metaclass=ABCMeta):
             print(f'已写入{path}')
         except Exception as e:
             OperationError(f'无法写入文件：{path}，原因是：{e}')
+
+    @classmethod
+    def file_record_output_lines(cls, file_records: List[FileRecord]) -> List[str]:
+        """
+        将文件记录转换成对应的输出字符串列表
+        :param file_records:
+        :return: 字符串列表
+        """
+        outputs = []
+        for record in file_records:
+            path = f'{record.dir_path[1:]}{record.name}{record.suffix}'
+            outputs.append(f'{path}\t{cls.human_readable_size(record.size)}\t{record.modified_date}')
+        return outputs
 
 
 class DataBaseScript(BaseScript, metaclass=ABCMeta):

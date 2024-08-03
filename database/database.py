@@ -303,6 +303,15 @@ class Database(metaclass=ABCMeta):
         :return: 大小（字节）
         """
 
+    @abstractmethod
+    def find_in_file_path(self, column: str, keyword: str) -> List[FileRecord]:
+        """
+        在文件记录的指定字段中寻找指定关键字
+        :param column: 字段
+        :param keyword: 关键字
+        :return: 查询到的文件记录
+        """
+
 
 class MysqlTransaction(Transaction):
     def __init__(self, connection: Connection):
@@ -815,3 +824,30 @@ class MysqlDataBase(Database):
                 (dir_id,)
             )
             return int(cursor.fetchone()[0])
+
+    def find_in_file_path(self, column: str, keyword: str) -> List[FileRecord]:
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT 
+                dir_path, `name`, suffix, md5, `size`, modified_timestamp, id, dir_id
+                FROM file WHERE %s LIKE %s;
+                """ % (column, '%s'),
+                (f'%{keyword}%',)
+            )
+            file_records = []
+            while True:
+                res = cursor.fetchone()
+                if res is None:
+                    break
+                file_records.append(FileRecord(
+                    dir_path=res[0],
+                    name=res[1],
+                    suffix=res[2],
+                    md5=res[3],
+                    size=int(res[4]),
+                    modified_time=int(res[5]),
+                    file_id=int(res[6]),
+                    directory_id=int(res[7])
+                ))
+            return file_records
