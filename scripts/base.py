@@ -1,5 +1,5 @@
 from abc import abstractmethod, ABCMeta
-from typing import Union, List
+from typing import Union, List, Dict, Tuple
 import json
 from json.decoder import JSONDecodeError
 import os
@@ -320,6 +320,80 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
         dir_id = self.db.directory_id(name)
         assert dir_id is not None, OperationError(f'目录名字{name}不存在于数据库中，无法操作')
         return dir_id
+
+    @classmethod
+    def query_actions(
+            cls,
+            prompt: str,
+            exact_response_actions: Dict[str, Tuple[str, callable]] = None,
+            cmd_response_actions: Dict[str, Tuple[str, str, callable]] = None
+    ):
+        """
+        询问用户并根据回应执行动作
+        :param prompt: 提示
+        :param exact_response_actions:
+            根据回应应该做的动作，要求精确匹配，动作是一个不接收任何参数，返回布尔值的函数，返回True表示退出询问，否则继续询问
+            [输入] -> (动作说明，动作函数)
+        :param cmd_response_actions:
+            根据回应应该做的动作，命令式的回应，以字典键作为开头进行匹配，动作是一个接收字符串，返回布尔值的函数，返回True表示退出询问，否则继续询问
+            [输入] -> (动作说明，参数说明，动作函数)
+        :return:
+        """
+        exact_response_actions = exact_response_actions or {}
+        cmd_response_actions = cmd_response_actions or {}
+        assert len(exact_response_actions) + len(cmd_response_actions) > 0, CodingError('请至少给一个回应动作')
+        skip_action = ('无视并不再询问', cls._query_action_skip)
+        exact_response_actions.update(s=skip_action, skip=skip_action)
+
+        # 生成提示
+        action_keys_hint = {}
+        for key in sorted(list(exact_response_actions.keys())):
+            hint, action = exact_response_actions[key]
+            a_id = id(action)
+            keys_hint = action_keys_hint.get(a_id, ([], None, hint))
+            keys_hint[0].append(key)
+            action_keys_hint[a_id] = keys_hint
+        for key in sorted(list(cmd_response_actions.keys())):
+            args_hint, hint, action = cmd_response_actions[key]
+            a_id = id(action)
+            keys_hint = action_keys_hint.get(a_id, ([], args_hint, hint))
+            keys_hint[0].append(key)
+            action_keys_hint[a_id] = keys_hint
+        keys_hints = []
+        for key_list, args_hint, hint in action_keys_hint.values():
+            sorted(key_list)
+            keys_hints.append((key_list, args_hint, hint))
+        sorted(keys_hints, key=lambda x: x[0][0])
+        for key_list, args_hint, hint in keys_hints:
+            prompt += f'\n{" ".join(key_list)} {args_hint or ""}: {hint}'
+        prompt += '\n其他输入将被视为无效输入并将继续询问'
+
+        while True:
+            inputs = input(prompt).strip()
+            _, action = exact_response_actions.get(inputs, (None, None))
+            if action is not None:
+                if action():
+                    break
+                else:
+                    continue
+            for cmd, (_, _, act) in cmd_response_actions.items():
+                if inputs.startswith(cmd):
+                    action = act
+                    break
+            if action is not None:
+                if action(inputs):
+                    break
+                else:
+                    continue
+            prompt = '无法识别该命令，请重新输入：'
+
+    @staticmethod
+    def _query_action_skip():
+        """
+        根据用户回答执行动作：跳过 是个空函数
+        :return: True
+        """
+        return True
 
 
 class FileMD5ComputingScript(DataBaseScript, metaclass=ABCMeta):

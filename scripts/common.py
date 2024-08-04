@@ -196,45 +196,45 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         if len(unique_paths) == 0:
             return
 
-        while True:
-            inputs = input(
-                f'数据库相较本地中缺失{len(unique_paths)}条文件记录，对于这些文件记录的可选操作如下：\n'
-                'a：将这些文件记录更新到数据库中\n'
-                'b：【注意！】删除本地的这些文件\n'
-                'c: 每条记录单独询问\n'
-                'ls [写入文件路径]: 列出这些文件的目录路径 [写入指定的文件中]\n'
-                'exit: 无视并不再询问\n'
-                '其他输入将被视为无效输入并将继续询问\n'
-            ).strip()
-            if inputs == 'a':
-                file_records = [local_records[each] for each in unique_paths]
-                if self.input_query(
-                        f'这些文件大小共为{self.human_readable_size(sum([each.size for each in file_records]))}，'
-                        f'是否在输入数据库前计算md5值？'
-                ):
-                    created = sum(self.file_md5_computing_transactions(
-                        file_records, self.db.new_file_records, dir_id=dir_id,
-                    ))
-                else:
-                    created = self.transaction(self.db.new_file_records, dir_id=dir_id, file_records=file_records)
-                assert created == len(file_records), \
-                    RunTimeError(f'理应插入{len(file_records)}条数据库文件记录，但只插入了{created}条')
-                print(f'插入了{created}条文件记录')
-                break
-            elif inputs == 'b':
-                for path in unique_paths:
-                    self.remove_single_file(join(dir_path, *(path.split('/')[1:])))
-                break
-            elif inputs == 'c':
-                for path in unique_paths:
-                    self._unique_local_records_query_each_action(dir_path, dir_id, path, local_records[path])
-                break
-            elif inputs.startswith('ls'):
-                self.cmd_ls(inputs, sorted(list(unique_paths)))
-            elif inputs == 'exit':
-                break
+        def action_a():
+            file_records = [local_records[each] for each in unique_paths]
+            if self.input_query(
+                    f'这些文件大小共为{self.human_readable_size(sum([each.size for each in file_records]))}，'
+                    f'是否在输入数据库前计算md5值？'
+            ):
+                created = sum(self.file_md5_computing_transactions(
+                    file_records, self.db.new_file_records, dir_id=dir_id,
+                ))
             else:
-                print('无法识别该命令')
+                created = self.transaction(self.db.new_file_records, dir_id=dir_id, file_records=file_records)
+            assert created == len(file_records), \
+                RunTimeError(f'理应插入{len(file_records)}条数据库文件记录，但只插入了{created}条')
+            print(f'插入了{created}条文件记录')
+            return True
+
+        def action_b():
+            for path in unique_paths:
+                self.remove_single_file(join(dir_path, *(path.split('/')[1:])))
+            return True
+
+        def action_c():
+            for path in unique_paths:
+                self._unique_local_records_query_each_action(dir_path, dir_id, path, local_records[path])
+            return True
+
+        def action_ls(inputs):
+            self.cmd_ls(inputs, sorted(list(unique_paths)))
+            return False
+
+        self.query_actions(
+            f'数据库相较本地中缺失{len(unique_paths)}条文件记录，对于这些文件记录请问需要作何处理？',
+            {
+                'a': ('将这些文件记录更新到数据库中', action_a),
+                'b': ('【注意！】删除本地的这些文件', action_b),
+                'c': ('每条记录单独询问', action_c),
+            },
+            {'ls': ('列出这些文件的目录路径 [写入指定的文件中]', '[写入文件路径（可选）]', action_ls)}
+        )
 
     def _unique_local_records_query_each_action(self, dir_path: str, dir_id: int, path: str, record: FileRecord):
         """
@@ -246,34 +246,32 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         :return: None
         """
         print(path)
-        while True:
-            inputs = input(
-                f'请问对上述本地独有的文件记录需要作何处理？\n'
-                'a：将该文件记录更新到数据库中\n'
-                'b：【注意！】删除该文件记录对应的文件\n'
-                'exit: 无视并不再询问\n'
-                '其他输入将被视为无效输入并将继续询问\n'
-            ).strip()
-            if inputs == 'a':
-                if self.input_query(
-                        f'该文件大小为{self.human_readable_size(record.size)}，'
-                        f'是否在输入数据库前计算md5值？'
-                ):
-                    created = self.file_md5_computing_transactions(
-                        [record], self.db.new_file_records, dir_id=dir_id,
-                    )
-                else:
-                    created = self.transaction(self.db.new_file_records, dir_id=dir_id, file_records=[record])
-                assert created == 1, RunTimeError(f'理应插入1条数据库文件记录，但插入了{created}条')
-                print(f'插入了{created}条文件记录')
-                break
-            elif inputs == 'b':
-                self.remove_single_file(join(dir_path, *(path.split('/')[1:])))
-                break
-            elif inputs == 'exit':
-                break
+
+        def action_a():
+            if self.input_query(
+                    f'该文件大小为{self.human_readable_size(record.size)}，'
+                    f'是否在输入数据库前计算md5值？'
+            ):
+                created = self.file_md5_computing_transactions(
+                    [record], self.db.new_file_records, dir_id=dir_id,
+                )
             else:
-                print('无法识别该命令')
+                created = self.transaction(self.db.new_file_records, dir_id=dir_id, file_records=[record])
+            assert created == 1, RunTimeError(f'理应插入1条数据库文件记录，但插入了{created}条')
+            print(f'插入了{created}条文件记录')
+            return True
+
+        def action_b():
+            self.remove_single_file(join(dir_path, *(path.split('/')[1:])))
+            return True
+
+        self.query_actions(
+            f'请问对上述本地独有的文件记录需要作何处理？',
+            {
+                'a': ('将该文件记录更新到数据库中', action_a),
+                'b': ('【注意！】删除该文件记录对应的文件', action_b),
+            }
+        )
 
     def _unique_db_records_action(
             self,
@@ -293,38 +291,38 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         if len(unique_paths) == 0:
             return
 
-        while True:
-            inputs = input(
-                f'本地相较数据库中缺失{len(unique_paths)}条文件记录，对于这些文件记录的可选操作如下：\n'
-                'a：【注意！】删除所有数据库中的相关文件记录\n'
-                'b：尝试从其他同目录的受管理物理位置复制这些文件到本地\n'
-                'ls [写入文件路径]: 列出这些文件的目录路径 [写入指定的文件中]\n'
-                'exit: 无视并不再询问\n'
-                '其他输入将被视为无效输入并将继续询问\n'
-            ).strip()
-            if inputs == 'a':
-                ids = [db_records[path].file_id for path in unique_paths]
-                assert all(each is not None for each in ids), CodingError('数据库中的文件记录中的文件id不应该为None')
-                for path in sorted(list(unique_paths)):
-                    print(path)
-                if self.input_query('将删除上述文件在数据库中的记录，是否继续？'):
-                    deleted = self.transaction(
-                        self.db.delete_file_record_by_ids,
-                        file_ids=ids
-                    )
-                    print(f'删除了{deleted}条文件记录')
-                break
-            elif inputs == 'b':
-                file_records = [db_records[path] for path in unique_paths]
-                self._unique_db_records_copy_from_others(dir_path, dir_id, file_records)
-                break
-            elif inputs.startswith('ls'):
-                self.cmd_ls(inputs, sorted(list(unique_paths)))
-            elif inputs == 'exit':
-                # TODO: exit换为skip和s
-                break
-            else:
-                print('无法识别该命令')
+        def action_a():
+            ids = [db_records[path].file_id for path in unique_paths]
+            assert all(each is not None for each in ids), CodingError('数据库中的文件记录中的文件id不应该为None')
+            for path in sorted(list(unique_paths)):
+                print(path)
+            if self.input_query('将删除上述文件在数据库中的记录，是否继续？'):
+                deleted = self.transaction(
+                    self.db.delete_file_record_by_ids,
+                    file_ids=ids
+                )
+                print(f'删除了{deleted}条文件记录')
+            return True
+
+        def action_b():
+            file_records = [db_records[path] for path in unique_paths]
+            self._unique_db_records_copy_from_others(dir_path, dir_id, file_records)
+            return True
+
+        def action_ls(inputs):
+            self.cmd_ls(inputs, sorted(list(unique_paths)))
+            return False
+
+        self.query_actions(
+            f'本地相较数据库中缺失{len(unique_paths)}条文件记录，请问对这些文件记录要做何操作？',
+            {
+                'a': ('【注意！】删除所有数据库中的相关文件记录', action_a),
+                'b': ('尝试从其他同目录的受管理物理位置复制这些文件到本地', action_b)
+            },
+            {
+                'ls': ('列出这些文件的目录路径 [写入指定的文件中]', '[写入文件路径（可选）]', action_ls)
+            }
+        )
 
     def _get_valid_other_management_paths(self, dir_path: str, dir_id: int) -> List[str]:
         """
@@ -493,53 +491,56 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         """
         if len(path2records) == 0:
             return
-        while True:
-            inputs = input(
-                f'【注意！】共有{len(path2records)}项本地文件记录的文件与数据库中相应记录冲突：请问需要作何处理？\n'
-                f'a：以本地文件记录覆盖数据库中的记录并计算md5值\n'
-                f'b：以本地文件记录覆盖数据库中的记录但不计算md5值\n'
-                f'c: 每条记录单独询问\n'
-                f'ls [写入文件路径]: 列出这些文件的目录路径 [写入指定的文件中]\n'
-                f'exit: 无视并不再询问\n'
-                '其他输入将被视为无效输入并将继续询问\n'
-            ).strip()
-            if inputs == 'a':
-                for each in sorted(list(path2records.keys())):
-                    print(each)
-                if not self.input_query('上述文件记录将被计算md5值并更新入数据库。是否继续？'):
-                    continue
-                records = [local_record for local_record, _ in path2records.values()]
-                updated = sum(self.file_md5_computing_transactions(records, self.db.update_file_records))
-                print(f'更新了{updated}条数据库记录')
-                return
-            elif inputs == 'b':
-                for each in sorted(list(path2records.keys())):
-                    print(each)
-                if not self.input_query('上述文件记录更新入数据库。是否继续？'):
-                    continue
-                records = [local_record for local_record, _ in path2records.values()]
-                updated = self.transaction(self.db.update_file_records, file_records=records)
-                print(f'更新了{updated}条数据库记录')
-                return
-            elif inputs == 'c':
-                for path, (local, db) in path2records.items():
-                    self._common_path_conflict_query_each_action(dir_path, dir_id, path, local, db)
-                break
-            elif inputs.startswith('ls'):
-                outputs = []
-                for path in sorted(list(path2records.keys())):
-                    local, db = path2records[path]
-                    output = path
-                    if local.size != db.size:
-                        output += f'\t大小(本地/数据库)({local.size}/{db.size})'
-                    if local.modified_time != db.modified_time:
-                        output += f'\t修改时间(本地/数据库)({local.modified_date}/{db.modified_date})'
-                    outputs.append(output)
-                self.cmd_ls(inputs, outputs)
-            elif inputs == 'exit':
-                return
-            else:
-                print(f'无法识别命令：{inputs}')
+
+        def action_a():
+            for each in sorted(list(path2records.keys())):
+                print(each)
+            if not self.input_query('上述文件记录将被计算md5值并更新入数据库。是否继续？'):
+                return False
+            records = [local_record for local_record, _ in path2records.values()]
+            updated = sum(self.file_md5_computing_transactions(records, self.db.update_file_records))
+            print(f'更新了{updated}条数据库记录')
+            return True
+
+        def action_b():
+            for each in sorted(list(path2records.keys())):
+                print(each)
+            if not self.input_query('上述文件记录更新入数据库。是否继续？'):
+                return False
+            records = [local_record for local_record, _ in path2records.values()]
+            updated = self.transaction(self.db.update_file_records, file_records=records)
+            print(f'更新了{updated}条数据库记录')
+            return True
+
+        def action_c():
+            for path, (local, db) in path2records.items():
+                self._common_path_conflict_query_each_action(dir_path, dir_id, path, local, db)
+            return True
+
+        def action_ls(inputs):
+            outputs = []
+            for path in sorted(list(path2records.keys())):
+                local, db = path2records[path]
+                output = path
+                if local.size != db.size:
+                    output += f'\t大小(本地/数据库)({local.size}/{db.size})'
+                if local.modified_time != db.modified_time:
+                    output += f'\t修改时间(本地/数据库)({local.modified_date}/{db.modified_date})'
+                outputs.append(output)
+            self.cmd_ls(inputs, outputs)
+            return False
+
+        self.query_actions(
+            f'【注意！】共有{len(path2records)}项本地文件记录的文件与数据库中相应记录冲突：请问需要作何处理？',
+            {
+                'a': ('以本地文件记录覆盖数据库中的记录并计算md5值', action_a),
+                'b': ('以本地文件记录覆盖数据库中的记录但不计算md5值', action_b),
+                'c': ('每条记录单独询问', action_c),
+            },
+            {
+                'ls': ('列出这些文件的目录路径 [写入指定的文件中]', '[写入文件路径（可选）]', action_ls)
+            }
+        )
 
     def _common_path_conflict_query_each_action(
             self, dir_path: str, dir_id: int, path: str,
@@ -551,42 +552,41 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         if local_record.modified_time != db_record.modified_time:
             output += f'\n修改时间(本地/数据库)：({local_record.modified_date}/{db_record.modified_date})'
         print(output)
-        while True:
-            inputs = input(
-                f'请问对上述冲突记录需要作何处理？\n'
-                f'a：以本地文件记录覆盖数据库中的记录并计算md5值\n'
-                f'b：以本地文件记录覆盖数据库中的记录但不计算md5值\n'
-                f'c: 删除本地的文件，并尝试从其他物理位置复制该文件\n'
-                f'exit: 无视并不再询问\n'
-                '其他输入将被视为无效输入并将继续询问\n'
-            ).strip()
-            if inputs == 'a':
-                updated = sum(self.file_md5_computing_transactions([local_record], self.db.update_file_records))
-                print(f'更新了{updated}条数据库记录')
-                break
-            elif inputs == 'b':
-                updated = self.transaction(self.db.update_file_records, file_records=[local_record])
-                print(f'更新了{updated}条数据库记录')
-                break
-            elif inputs == 'c':
-                other_dir_paths = self._get_valid_other_management_paths(dir_path, dir_id)
-                real_split_path = (path.split('/')[1:])
-                file_other_real_path = self._find_single_file_in_other_managements(local_record, other_dir_paths)
-                file_real_path = join(dir_path, *real_split_path)
-                if file_other_real_path is not None:
-                    if not self.input_query(
-                            f'将删除：{file_real_path}，并复制{file_other_real_path}到被删除文件的位置，是否继续？'
-                    ):
-                        break
-                    os.remove(file_real_path)
-                    shutil.copy2(file_other_real_path, file_real_path)
-                else:
-                    self.remove_single_file(file_real_path)
-                break
-            elif inputs == 'exit':
-                break
+
+        def action_a():
+            updated = sum(self.file_md5_computing_transactions([local_record], self.db.update_file_records))
+            print(f'更新了{updated}条数据库记录')
+            return True
+
+        def action_b():
+            updated = self.transaction(self.db.update_file_records, file_records=[local_record])
+            print(f'更新了{updated}条数据库记录')
+            return True
+
+        def action_c():
+            other_dir_paths = self._get_valid_other_management_paths(dir_path, dir_id)
+            real_split_path = (path.split('/')[1:])
+            file_other_real_path = self._find_single_file_in_other_managements(local_record, other_dir_paths)
+            file_real_path = join(dir_path, *real_split_path)
+            if file_other_real_path is not None:
+                if not self.input_query(
+                        f'将删除：{file_real_path}，并复制{file_other_real_path}到被删除文件的位置，是否继续？'
+                ):
+                    return False
+                os.remove(file_real_path)
+                shutil.copy2(file_other_real_path, file_real_path)
             else:
-                print(f'无法识别命令：{inputs}')
+                self.remove_single_file(file_real_path)
+            return True
+
+        self.query_actions(
+            f'请问对上述冲突记录需要作何处理？',
+            {
+                'a': ('以本地文件记录覆盖数据库中的记录并计算md5值', action_a),
+                'b': ('以本地文件记录覆盖数据库中的记录但不计算md5值', action_b),
+                'c': ('删除本地的文件，并尝试从其他物理位置复制该文件', action_c),
+            }
+        )
 
     def _common_path_match_without_db_md5_action(
             self,
@@ -748,36 +748,33 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
         file_records = self.db.query_file_by_id(all_file_ids)
         all_directory = None
 
-        while True:
-            inputs = input(
-                f'共有{len(size2file_ids)}项文件记录至少与其他文件拥有相同的大小。请问需要作何处理？\n'
-                f'a：计算这些文件的md5值并存入数据库中，并找出冲突的文件\n'
-                f'ls [写入文件路径]: 列出这些文件的目录路径和大小 [写入指定的文件中]\n'
-                f'exit: 无视并不再询问\n'
-                '其他输入将被视为无效输入并将继续询问\n'
-            ).strip()
-            if inputs == 'a':
-                updated = sum(self.file_md5_computing_transactions(
-                    list(file_records.values()), self.db.update_file_records))
-                print(f'更新了{updated}条数据库记录')
-                break
-            elif inputs.startswith('ls'):
-                if all_directory is None:
-                    all_directory_ids = set()
-                    for record in file_records.values():
-                        all_directory_ids.add(record.directory_id)
-                    all_directory = self.db.query_directory_by_id(list(all_directory_ids))
-                outputs = []
-                for size, md5_ids in size2file_ids.items():
-                    outputs.append(f'大小: {self.human_readable_size(size)}')
-                    for file_id in md5_ids:
-                        record = file_records[file_id]
-                        outputs.append(f'{all_directory[record.directory_id].name}:{file_records[file_id].path}')
-                self.cmd_ls(inputs, outputs)
-            elif inputs == 'exit':
-                break
-            else:
-                print(f'无法识别命令：{inputs}')
+        def action_a():
+            updated = sum(self.file_md5_computing_transactions(
+                list(file_records.values()), self.db.update_file_records))
+            print(f'更新了{updated}条数据库记录')
+            return True
+
+        def action_ls(inputs):
+            nonlocal all_directory
+            if all_directory is None:
+                all_directory_ids = set()
+                for record in file_records.values():
+                    all_directory_ids.add(record.directory_id)
+                all_directory = self.db.query_directory_by_id(list(all_directory_ids))
+            outputs = []
+            for size, md5_ids in size2file_ids.items():
+                outputs.append(f'大小: {self.human_readable_size(size)}')
+                for file_id in md5_ids:
+                    record = file_records[file_id]
+                    outputs.append(f'{all_directory[record.directory_id].name}:{file_records[file_id].path}')
+            self.cmd_ls(inputs, outputs)
+            return False
+
+        self.query_actions(
+            f'共有{len(size2file_ids)}项文件记录至少与其他文件拥有相同的大小。请问需要作何处理？',
+            {'a': ('以本地文件记录覆盖数据库中的记录并计算md5值', action_a), },
+            {'ls': ('列出这些文件的目录路径和大小 [写入指定的文件中]', '[写入文件路径（可选）]', action_ls)}
+        )
 
     def _process_common_size_md5_file_ids(
             self,
@@ -795,71 +792,67 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
             all_directory_ids.add(record.directory_id)
         all_directory = self.db.query_directory_by_id(list(all_directory_ids))
 
-        while True:
-            inputs = input(
-                f'共有{len(size_md5_to_file_records)}项文件记录至少与其他文件拥有相同的大小和md5值。请问需要作何处理？\n'
-                f'a：列出相冲突的文件并询问保留哪条冲突的记录\n'
-                f'ls [写入文件路径]: 列出这些文件的目录路径、大小和md5值 [写入指定的文件中]\n'
-                f'exit: 无视并不再询问\n'
-                '其他输入将被视为无效输入并将继续询问\n'
-            ).strip()
-            if inputs == 'a':
-                for size, md5_dict in size_md5_to_file_records.items():
-                    for md5, ids in md5_dict.items():
-                        print(f'大小: {self.human_readable_size(size)}，md5：{md5}')
-                        for i, file_id in enumerate(ids):
-                            record = file_records[file_id]
-                            print(f'【{i}】{all_directory[record.directory_id].name}:{file_records[file_id].path}')
-                        keep_ids = set()
-                        while True:
-                            keep = input(
-                                '请选择您需要保留的文件记录：输入上述文件记录相应的数字，'
-                                '多个选择可用空格分隔，输入"skip"或者"跳过"可以跳过这次询问'
-                            ).strip()
-                            try:
-                                if keep == 'skip' or keep == '跳过':
-                                    keep_ids = set(list(range(len(ids))))
-                                    break
-                                for each in keep.split(' '):
-                                    each = int(each)
-                                    assert 0 <= each < len(ids)
-                                    keep_ids.add(each)
+        def action_a():
+            for size, md5_dict in size_md5_to_file_records.items():
+                for md5, _ids in md5_dict.items():
+                    print(f'大小: {self.human_readable_size(size)}，md5：{md5}')
+                    for i, file_id in enumerate(_ids):
+                        _record = file_records[file_id]
+                        print(f'【{i}】{all_directory[_record.directory_id].name}:{file_records[file_id].path}')
+                    keep_ids = set()
+                    while True:
+                        keep = input(
+                            '请选择您需要保留的文件记录：输入上述文件记录相应的数字，'
+                            '多个选择可用空格分隔，输入"skip"或者"s"可以跳过这次询问'
+                        ).strip()
+                        try:
+                            if keep == 'skip' or keep == 's':
+                                keep_ids = set(list(range(len(_ids))))
                                 break
-                            except ValueError:
-                                print(f'无法识别输入：{keep}，请重新输入')
-                            except AssertionError:
-                                print(f'请输入0至{len(ids)}的整数')
-                        if len(keep_ids) == len(ids):
-                            continue
-                        to_delete = []
-                        for i, file_id in enumerate(ids):
-                            record = file_records[file_id]
-                            if i not in keep_ids:
-                                to_delete.append(record.file_id)
-                            print(
-                                f'【{i}】{all_directory[record.directory_id].name}:'
-                                f'{file_records[file_id].path}',
-                                '将被保留' if i in keep_ids else '将被删除'
-                            )
-                        if self.input_query('上述操作将会修改数据库，请确认'):
-                            print(
-                                f'删除了{self.transaction(self.db.delete_file_record_by_ids, file_ids=to_delete)}'
-                                f'条文件记录'
-                            )
-                break
-            elif inputs.startswith('ls'):
-                outputs = []
-                for size, md5_dict in size_md5_to_file_records.items():
-                    for md5, ids in md5_dict.items():
-                        outputs.append(f'大小: {self.human_readable_size(size)}，md5：{md5}')
-                        for file_id in ids:
-                            record = file_records[file_id]
-                            outputs.append(f'{all_directory[record.directory_id].name}:{file_records[file_id].path}')
-                self.cmd_ls(inputs, outputs)
-            elif inputs == 'exit':
-                break
-            else:
-                print(f'无法识别命令：{inputs}')
+                            for each in keep.split(' '):
+                                each = int(each)
+                                assert 0 <= each < len(_ids)
+                                keep_ids.add(each)
+                            break
+                        except ValueError:
+                            print(f'无法识别输入：{keep}，请重新输入')
+                        except AssertionError:
+                            print(f'请输入0至{len(_ids)}的整数')
+                    if len(keep_ids) == len(_ids):
+                        continue
+                    to_delete = []
+                    for i, file_id in enumerate(_ids):
+                        _record = file_records[file_id]
+                        if i not in keep_ids:
+                            to_delete.append(_record.file_id)
+                        print(
+                            f'【{i}】{all_directory[_record.directory_id].name}:'
+                            f'{file_records[file_id].path}',
+                            '将被保留' if i in keep_ids else '将被删除'
+                        )
+                    if self.input_query('上述操作将会修改数据库，请确认'):
+                        print(
+                            f'删除了{self.transaction(self.db.delete_file_record_by_ids, file_ids=to_delete)}'
+                            f'条文件记录'
+                        )
+            return True
+
+        def action_ls(inputs):
+            outputs = []
+            for size, md5_dict in size_md5_to_file_records.items():
+                for md5, _ids in md5_dict.items():
+                    outputs.append(f'大小: {self.human_readable_size(size)}，md5：{md5}')
+                    for file_id in _ids:
+                        _record = file_records[file_id]
+                        outputs.append(f'{all_directory[_record.directory_id].name}:{file_records[file_id].path}')
+            self.cmd_ls(inputs, outputs)
+            return False
+
+        self.query_actions(
+            f'共有{len(size_md5_to_file_records)}项文件记录至少与其他文件拥有相同的大小和md5值。请问需要作何处理？',
+            {'a': ('列出相冲突的文件并询问保留哪条冲突的记录', action_a), },
+            {'ls': ('列出这些文件的目录路径、大小和md5值 [写入指定的文件中]', '[写入文件路径（可选）]', action_ls)}
+        )
 
 
 class QuerySizeScript(DataBaseScript):
