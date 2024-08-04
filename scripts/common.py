@@ -663,9 +663,12 @@ class CancelManagementScript(SingleTransactionScript):
             return 1
         fm_path = join(path, '.lyl232fm')
         if exists(fm_path):
-            os.remove(fm_path)
-        else:
-            print('请记得删除该目录下的.lyl232fm文件夹')
+            try:
+                os.remove(fm_path)
+                return 0
+            except Exception as e:
+                print(f'由于{e}的原因，没能成功删除管理文件夹:{fm_path}')
+        print('请记得删除该目录下的.lyl232fm文件夹')
         return 0
 
 
