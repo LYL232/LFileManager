@@ -170,7 +170,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         current_unique = current_paths - db_file_path
         db_unique = db_file_path - current_paths
 
-        self._common_path_records_action(common_path, local_records, db_records)
+        self._common_path_records_action(dir_path, dir_id, common_path, local_records, db_records)
 
         self._unique_db_records_action(dir_path, dir_id, db_unique, db_records)
         self._unique_local_records_action(dir_path, dir_id, current_unique, local_records)
@@ -268,23 +268,86 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                     print(f'删除了{deleted}条文件记录')
                 break
             elif inputs == 'b':
-                self._unique_db_records_copy_from_others(dir_path, dir_id, unique_paths)
+                file_records = [db_records[path] for path in unique_paths]
+                self._unique_db_records_copy_from_others(dir_path, dir_id, file_records)
                 break
             elif inputs.startswith('ls'):
                 self.cmd_ls(inputs, sorted(list(unique_paths)))
             elif inputs == 'exit':
+                # TODO: exit换为skip和s
                 break
             else:
                 print('无法识别该命令')
 
+    def _get_valid_other_management_paths(self, dir_path: str, dir_id: int) -> List[str]:
+        """
+        获取指定目录其他有效的物理路径
+        :param dir_path: 正在操作的目录路径（返回的结果将不包含该目录路径）
+        :param dir_id: 目录id
+        :return: 其他有效的物理路径
+        """
+        other_dir_paths = []
+        not_exist_path_tags = []
+        # 这里假设其他物理位置下的路径的文件都是与数据库一致的
+        for tag, path in self.db.managements(dir_id):
+            if samefile(path, dir_path):
+                continue
+            if not exists(path):
+                not_exist_path_tags.append(tag)
+                continue
+            other_dir_paths.append(path)
+        if len(not_exist_path_tags):
+            self.transaction(self.db.reset_management_path, tags=not_exist_path_tags)
+        return other_dir_paths
+
+    def _find_file_in_other_managements(
+            self, dir_path: str, dir_id: int, records: List[FileRecord]
+    ) -> Tuple[Dict[str, str], Set[str]]:
+        """
+        在其他的管理记录中找到有效的指定文件记录的备份
+        :param dir_path: 正在操作的目录路径
+        :param dir_id: 目录id
+        :param records: 需要操作的文件记录列表
+        :return: ([本地路径->其他有效备份的路径], {找不到的路径})
+        """
+        other_dir_paths = self._get_valid_other_management_paths(dir_path, dir_id)
+
+        found_file_paths, not_found_paths = {}, set()
+        # 尝试寻找所有的文件路径
+        for record in records:
+            path = record.path
+            found = self._find_single_file_in_other_managements(record, other_dir_paths)
+            local_real_path = join(dir_path, *(path.split('/')[1:]))
+            if found is None:
+                not_found_paths.add(path)
+            else:
+                found_file_paths[local_real_path] = found
+        return found_file_paths, not_found_paths
+
+    @staticmethod
+    def _find_single_file_in_other_managements(
+            record, other_dir_paths: List[str]
+    ) -> Tuple[Dict[str, str], Set[str]]:
+        """
+        在其他的管理记录中找到有效的指定文件记录的备份
+        :param record: 需要操作的文件记录
+        :param other_dir_paths: 本目录其他有效的物理路径
+        :return: ([本地路径->其他有效备份的路径], {找不到的路径})
+        """
+        for dp in other_dir_paths:
+            real_path = join(dp, *(record.path.split('/')[1:]))
+            if exists(real_path):
+                return real_path
+        return None
+
     def _unique_db_records_copy_from_others(
-            self, dir_path, dir_id: int, unique_paths: Set[str]
+            self, dir_path, dir_id: int, records: List[FileRecord]
     ):
         """
         数据库有但本地缺失的文件记录，采取从其他位置复制而来的动作
         :param dir_path: 当前正在操作的目录路径
         :param dir_id: 目录id
-        :param unique_paths: 需要处理的路径集合
+        :param records: 需要处理的文件记录
         :return: 没法找到物理位置的文件记录
         """
         other_dir_paths = []
@@ -300,19 +363,9 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         if len(not_exist_path_tags):
             self.transaction(self.db.reset_management_path, tags=not_exist_path_tags)
 
-        found_file_paths, not_found_paths = {}, set()
-        # 尝试寻找所有的文件路径
-        for path in unique_paths:
-            found = False
-            for dp in other_dir_paths:
-                real_path = join(dp, *(path.split('/')[1:]))
-                local_real_path = join(dir_path, *(path.split('/')[1:]))
-                if exists(real_path):
-                    found_file_paths[local_real_path] = real_path
-                    found = True
-                    break
-            if not found:
-                not_found_paths.add(path)
+        found_file_paths, not_found_paths = self._find_file_in_other_managements(
+            dir_path, dir_id, records
+        )
 
         if len(found_file_paths) > 0:
             local_paths = sorted(list(found_file_paths.keys()))
@@ -338,15 +391,19 @@ class ManageDirectoryScript(FileMD5ComputingScript):
 
     def _common_path_records_action(
             self,
+            dir_path: str,
+            dir_id: int,
             common_path: Set[str],
             local_records: Dict[str, FileRecord],
             db_records: Dict[str, FileRecord]
     ):
         """
         对现有文件记录与数据库文件记录中路径相同的部分的动作
-        :param common_path 两者相同路径的集合
-        :param local_records 当前的文件记录
-        :param db_records 数据库中的文件记录
+        :param dir_path: 当前操作的目录路径
+        :param dir_id: 当前操作的目录id
+        :param common_path: 两者相同路径的集合
+        :param local_records: 当前的文件记录
+        :param db_records: 数据库中的文件记录
         :return:
         """
         if len(common_path) == 0:
@@ -372,14 +429,18 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         self._common_path_match_without_db_md5_action(match_wo_md5)
         conflict.update(self._common_path_match_with_db_md5_action(match_with_md5))
 
-        self._common_path_conflict_action(conflict)
+        self._common_path_conflict_action(dir_path, dir_id, conflict)
 
     def _common_path_conflict_action(
             self,
+            dir_path: str,
+            dir_id: int,
             path2records: Dict[str, Tuple[FileRecord, FileRecord]]
     ):
         """
         拥有相同路径的本地文件记录与数据库文件记录相冲突的文件记录对
+        :param dir_path: 当前操作的目录路径
+        :param dir_id: 当前操作的目录路径
         :param path2records: 路径到记录对的映射
         :return:
         """
@@ -390,6 +451,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 f'【注意！】共有{len(path2records)}项本地文件记录的文件与数据库中相应记录冲突：请问需要作何处理？\n'
                 f'a：以本地文件记录覆盖数据库中的记录并计算md5值\n'
                 f'b：以本地文件记录覆盖数据库中的记录但不计算md5值\n'
+                f'c：每条记录单独询问\n'
                 f'ls [写入文件路径]: 列出这些文件的目录路径 [写入指定的文件中]\n'
                 f'exit: 无视并不再询问\n'
                 '其他输入将被视为无效输入并将继续询问\n'
@@ -412,10 +474,70 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 updated = self.transaction(self.db.update_file_records, file_records=records)
                 print(f'更新了{updated}条数据库记录')
                 return
+            elif inputs == 'c':
+                for path, (local, db) in path2records.items():
+                    self._common_path_conflict_query_each_action(dir_path, dir_id, path, local, db)
+                break
             elif inputs.startswith('ls'):
-                self.cmd_ls(inputs, sorted(list(path2records.keys())))
+                outputs = []
+                for path in sorted(list(path2records.keys())):
+                    local, db = path2records[path]
+                    output = path
+                    if local.size != db.size:
+                        output += f'\t大小(本地/数据库)({local.size}/{db.size})'
+                    if local.modified_time != db.modified_time:
+                        output += f'\t修改时间(本地/数据库)({local.modified_date}/{db.modified_date})'
+                    outputs.append(output)
+                self.cmd_ls(inputs, outputs)
             elif inputs == 'exit':
                 return
+            else:
+                print(f'无法识别命令：{inputs}')
+
+    def _common_path_conflict_query_each_action(
+            self, dir_path: str, dir_id: int, path: str,
+            local_record: FileRecord, db_record: FileRecord
+    ):
+        output = path
+        if local_record.size != db_record.size:
+            output += f'\n大小(本地/数据库)：({local_record.size}/{db_record.size})'
+        if local_record.modified_time != db_record.modified_time:
+            output += f'\n修改时间(本地/数据库)：({local_record.modified_date}/{db_record.modified_date})'
+        print(output)
+        while True:
+            inputs = input(
+                f'请问对上述冲突记录需要作何处理？\n'
+                f'a：以本地文件记录覆盖数据库中的记录并计算md5值\n'
+                f'b：以本地文件记录覆盖数据库中的记录但不计算md5值\n'
+                f'c: 删除本地的文件，并尝试从其他物理位置复制该文件\n'
+                f'exit: 无视并不再询问\n'
+                '其他输入将被视为无效输入并将继续询问\n'
+            ).strip()
+            if inputs == 'a':
+                updated = sum(self.file_md5_computing_transactions([local_record], self.db.update_file_records))
+                print(f'更新了{updated}条数据库记录')
+                break
+            elif inputs == 'b':
+                updated = self.transaction(self.db.update_file_records, file_records=[local_record])
+                print(f'更新了{updated}条数据库记录')
+                break
+            elif inputs == 'c':
+                other_dir_paths = self._get_valid_other_management_paths(dir_path, dir_id)
+                real_split_path = (path.split('/')[1:])
+                file_other_real_path = self._find_single_file_in_other_managements(local_record, other_dir_paths)
+                file_real_path = join(dir_path, *real_split_path)
+                if file_other_real_path is not None:
+                    if not self.input_query(
+                            f'将删除：{file_real_path}，并复制{file_other_real_path}到被删除文件的位置，是否继续？'
+                    ):
+                        break
+                    os.remove(file_real_path)
+                    shutil.copy2(file_other_real_path, file_real_path)
+                else:
+                    self.remove_single_file(file_real_path)
+                break
+            elif inputs == 'exit':
+                break
             else:
                 print(f'无法识别命令：{inputs}')
 
