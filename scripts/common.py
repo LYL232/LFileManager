@@ -849,12 +849,14 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
                     keep_ids = set()
                     while True:
                         keep = input(
-                            '请选择您需要保留的文件记录：输入上述文件记录相应的数字，'
+                            '请选择您需要保留的文件记录：输入上述文件记录相应的数字，如果都不保留，输入-1'
                             '多个选择可用空格分隔，输入"skip"或者"s"可以跳过这次询问'
                         ).strip()
                         try:
                             if keep == 'skip' or keep == 's':
                                 keep_ids = set(list(range(len(_ids))))
+                                break
+                            if keep == '-1':
                                 break
                             for each in keep.split(' '):
                                 each = int(each)
