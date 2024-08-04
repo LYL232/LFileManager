@@ -198,6 +198,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 f'数据库相较本地中缺失{len(unique_paths)}条文件记录，对于这些文件记录的可选操作如下：\n'
                 'a：将这些文件记录更新到数据库中\n'
                 'b：【注意！】删除本地的这些文件\n'
+                'c: 每条记录单独询问\n'
                 'ls [写入文件路径]: 列出这些文件的目录路径 [写入指定的文件中]\n'
                 'exit: 无视并不再询问\n'
                 '其他输入将被视为无效输入并将继续询问\n'
@@ -221,8 +222,51 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 for path in unique_paths:
                     self.remove_single_file(join(dir_path, *(path.split('/')[1:])))
                 break
+            elif inputs == 'c':
+                for path in unique_paths:
+                    self._unique_local_records_query_each_action(dir_path, dir_id, path, local_records[path])
+                break
             elif inputs.startswith('ls'):
                 self.cmd_ls(inputs, sorted(list(unique_paths)))
+            elif inputs == 'exit':
+                break
+            else:
+                print('无法识别该命令')
+
+    def _unique_local_records_query_each_action(self, dir_path: str, dir_id: int, path: str, record: FileRecord):
+        """
+        对于一个本地独有的文件记录的询问操作
+        :param dir_path: 正在操作的目录路径
+        :param dir_id: 目录id
+        :param path: 文件相对路径
+        :param record: 文件记录
+        :return: None
+        """
+        print(path)
+        while True:
+            inputs = input(
+                f'请问对上述本地独有的文件记录需要作何处理？\n'
+                'a：将该文件记录更新到数据库中\n'
+                'b：【注意！】删除该文件记录对应的文件\n'
+                'exit: 无视并不再询问\n'
+                '其他输入将被视为无效输入并将继续询问\n'
+            ).strip()
+            if inputs == 'a':
+                if self.input_query(
+                        f'该文件大小为{self.human_readable_size(record.size)}，'
+                        f'是否在输入数据库前计算md5值？'
+                ):
+                    created = self.file_md5_computing_transactions(
+                        [record], self.db.new_file_records, dir_id=dir_id,
+                    )
+                else:
+                    created = self.transaction(self.db.new_file_records, dir_id=dir_id, file_records=[record])
+                assert created == 1, RunTimeError(f'理应插入1条数据库文件记录，但插入了{created}条')
+                print(f'插入了{created}条文件记录')
+                break
+            elif inputs == 'b':
+                self.remove_single_file(join(dir_path, *(path.split('/')[1:])))
+                break
             elif inputs == 'exit':
                 break
             else:
@@ -451,7 +495,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 f'【注意！】共有{len(path2records)}项本地文件记录的文件与数据库中相应记录冲突：请问需要作何处理？\n'
                 f'a：以本地文件记录覆盖数据库中的记录并计算md5值\n'
                 f'b：以本地文件记录覆盖数据库中的记录但不计算md5值\n'
-                f'c：每条记录单独询问\n'
+                f'c: 每条记录单独询问\n'
                 f'ls [写入文件路径]: 列出这些文件的目录路径 [写入指定的文件中]\n'
                 f'exit: 无视并不再询问\n'
                 '其他输入将被视为无效输入并将继续询问\n'
