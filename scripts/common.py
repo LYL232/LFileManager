@@ -84,7 +84,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         assert tag is None or 0 < len(tag) <= 255, OperationError('管理标识允许的最大长度为255')
         assert isdir(dir_path), OperationError(f'{dir_path}不是一个目录')
 
-        dir_id = self.maintain_management(dir_path, name, tag)
+        dir_id, dir_path = self.maintain_management(dir_path, name, tag)
 
         # 获取当前目录的所有文件信息记录
         db_records = self.db.file_records(dir_id)
@@ -148,7 +148,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             dir_id = self.db.directory_id(name)
             self.transaction(self._create_or_update_management, dir_id=dir_id, tag=tag, dir_path=dir_path)
             assert dir_id is not None, OperationError(f'管理目录名字{name}并未被注册，无法关联，请使用mkdir脚本创建新的管理目录')
-        return dir_id
+        return dir_id, dir_path
 
     def _compare_local_records_to_db_records(
             self,
