@@ -2,7 +2,7 @@
 常规的脚本：经常使用的
 """
 import os
-from os.path import isdir, join, exists, abspath, samefile
+from os.path import isdir, join, exists, abspath, samefile, dirname
 from json.decoder import JSONDecodeError
 from typing import Set, Dict, Tuple, List
 from tqdm import tqdm
@@ -117,12 +117,24 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         :param tag: 目录标签
         :return: 目录id
         """
-        fm_dir = join(dir_path, '.lyl232fm')
-        if exists(fm_dir):
+        fm_dir = self._find_management_dir(dir_path)
+        if fm_dir is None:
+            # fm_dir不存在
+            assert name is not None, OperationError(f'目录名字缺失，而且目标路径{dir_path}不存在.lyl232fm文件夹，无法操作')
+            assert tag is not None, OperationError(f'目录管理标识缺失，而且目标路径{dir_path}不存在.lyl232fm文件夹，无法操作')
+
+            dir_id = self.db.directory_id(name)
+            assert dir_id is not None, OperationError(f'管理目录名字{name}并未被注册，无法关联，请使用mkdir脚本创建新的管理目录')
+            assert not self.db.tag_exists(tag), OperationError(f'标识：{tag}已经存在，无法关联')
+            self._write_manage_info(dir_path, name, tag)
+            self.transaction(self._create_or_update_management, dir_id=dir_id, tag=tag, dir_path=dir_path)
+        else:
+            dir_path = dirname(fm_dir)
             try:
-                info = self.load_manage_info(dir_path)
+                info = self.load_manage_info(fm_dir)
             except (JSONDecodeError, FileNotFoundError):
-                raise OperationError(f'该目录下存在由本程序维护的.lyl232fm文件夹，但无法读取出有效信息，请删除.lyl232fm文件夹')
+                raise OperationError(
+                    f'该目录下存在由本程序维护的.lyl232fm文件夹：{fm_dir}，但无法读取出有效信息，请删除该.lyl232fm文件夹')
 
             if (name is not None and info['name'] != name) or (
                     tag is not None and info['tag'] != tag
@@ -134,17 +146,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             # 更新数据库中管理的path字段
             name, tag = name or info['name'], tag or info['tag']
             dir_id = self.db.directory_id(name)
+            self.transaction(self._create_or_update_management, dir_id=dir_id, tag=tag, dir_path=dir_path)
             assert dir_id is not None, OperationError(f'管理目录名字{name}并未被注册，无法关联，请使用mkdir脚本创建新的管理目录')
-        else:
-            # fm_dir不存在
-            assert name is not None, OperationError(f'目录名字缺失，而且目标路径{dir_path}下不存在.lyl232fm文件夹，无法操作')
-            assert tag is not None, OperationError(f'目录管理标识缺失，而且目标路径{dir_path}下不存在.lyl232fm文件夹，无法操作')
-
-            dir_id = self.db.directory_id(name)
-            assert dir_id is not None, OperationError(f'管理目录名字{name}并未被注册，无法关联，请使用mkdir脚本创建新的管理目录')
-            assert not self.db.tag_exists(tag), OperationError(f'标识：{tag}已经存在，无法关联')
-            self._write_manage_info(dir_path, name, tag)
-        self.transaction(self._create_or_update_management, dir_id=dir_id, tag=tag, dir_path=dir_path)
         return dir_id
 
     def _compare_local_records_to_db_records(

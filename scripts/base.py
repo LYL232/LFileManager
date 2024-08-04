@@ -41,13 +41,13 @@ class BaseScript(metaclass=ABCMeta):
         pass
 
     @staticmethod
-    def load_manage_info(dir_path) -> dict:
+    def load_manage_info(lyl232fm_dir) -> dict:
         """
-        加载
-        :param dir_path: 管理的目录的路径
+        加载管理目录里的信息
+        :param lyl232fm_dir: 管理的目录的.lyl232fm路径
         :return: 信息字典
         """
-        info_file = join(dir_path, '.lyl232fm', 'info')
+        info_file = join(lyl232fm_dir, 'info')
         with open(info_file, 'r', encoding='utf8') as file:
             return json.load(file)
 
@@ -243,6 +243,24 @@ class BaseScript(metaclass=ABCMeta):
             outputs.append(f'{path}\t{cls.human_readable_size(record.size)}\t{record.modified_date}')
         return outputs
 
+    @staticmethod
+    def _find_management_dir(path: str) -> Union[str, None]:
+        """
+        从一个路径开始往上查找.lyl232fm目录
+        :param path: 路径
+        :return: 如果找到一个父目录有.lyl232fm则返回该路径，否则返回None
+        """
+        current_path = abspath(path)
+        while len(current_path) > 0 and exists(current_path):
+            fm_dir = join(current_path, '.lyl232fm')
+            if exists(fm_dir):
+                return fm_dir
+            next_path = dirname(current_path)
+            if next_path == current_path:
+                return None
+            current_path = next_path
+        return None
+
 
 class DataBaseScript(BaseScript, metaclass=ABCMeta):
     def __init__(self, database_config: Union[str, dict], *args, database: Database = None, **kwargs):
@@ -295,7 +313,7 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
         self.init_db_if_needed()
         if name is None:
             try:
-                name = self.load_manage_info(abspath('.'))['name']
+                name = self.load_manage_info(self._find_management_dir('.'))['name']
             except (JSONDecodeError, FileNotFoundError) as e:
                 print(e)
                 raise OperationError(f'请指定查询的目录名字')
