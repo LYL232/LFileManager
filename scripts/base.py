@@ -366,10 +366,11 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
         sorted(keys_hints, key=lambda x: x[0][0])
         for key_list, args_hint, hint in keys_hints:
             prompt += f'\n{" ".join(key_list)} {args_hint or ""}: {hint}'
-        prompt += '\n其他输入将被视为无效输入并将继续询问'
+        prompt += '\n其他输入将被视为无效输入并将继续询问\n'
 
         while True:
             inputs = input(prompt).strip()
+            prompt = ''
             _, action = exact_response_actions.get(inputs, (None, None))
             if action is not None:
                 if action():

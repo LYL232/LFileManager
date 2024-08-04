@@ -218,8 +218,11 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             return True
 
         def action_c():
+            count = 1
             for path in unique_paths:
+                print(f'({count}/{len(unique_paths)})')
                 self._unique_local_records_query_each_action(dir_path, dir_id, path, local_records[path])
+                count += 1
             return True
 
         def action_ls(inputs):
@@ -309,6 +312,14 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             self._unique_db_records_copy_from_others(dir_path, dir_id, file_records)
             return True
 
+        def action_c():
+            count = 1
+            for path in unique_paths:
+                print(f'({count}/{len(unique_paths)})')
+                self._unique_db_records_query_each_action(dir_path, dir_id, path, db_records[path])
+                count += 1
+            return True
+
         def action_ls(inputs):
             self.cmd_ls(inputs, sorted(list(unique_paths)))
             return False
@@ -317,10 +328,42 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             f'本地相较数据库中缺失{len(unique_paths)}条文件记录，请问对这些文件记录要做何操作？',
             {
                 'a': ('【注意！】删除所有数据库中的相关文件记录', action_a),
-                'b': ('尝试从其他同目录的受管理物理位置复制这些文件到本地', action_b)
+                'b': ('尝试从其他同目录的受管理物理位置复制这些文件到本地', action_b),
+                'c': ('单独询问每条文件记录', action_c),
             },
             {
                 'ls': ('列出这些文件的目录路径 [写入指定的文件中]', '[写入文件路径（可选）]', action_ls)
+            }
+        )
+
+    def _unique_db_records_query_each_action(
+            self,
+            dir_path: str,
+            dir_id: int,
+            path: str,
+            record: FileRecord
+    ):
+        print(path)
+
+        def action_a():
+            assert record.file_id is not None, CodingError('数据库中的文件记录中的文件id不应该为None')
+            if self.input_query('将删除文件记录在数据库中的记录，是否继续？'):
+                deleted = self.transaction(
+                    self.db.delete_file_record_by_ids,
+                    file_ids=[record.file_id]
+                )
+                print(f'删除了{deleted}条文件记录')
+            return True
+
+        def action_b():
+            self._unique_db_records_copy_from_others(dir_path, dir_id, [record])
+            return True
+
+        self.query_actions(
+            f'请问对上述冲突记录需要作何处理？',
+            {
+                'a': ('【注意！】删除数据库中的该文件记录', action_a),
+                'b': ('尝试从其他同目录的受管理物理位置复制该文件到本地', action_b),
             }
         )
 
@@ -418,8 +461,9 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 real_path = found_file_paths[local_real_path]
                 print(f'{real_path} -> {local_real_path}')
             if self.input_query('将执行上述文件的复制，是否继续？'):
+                total = len(found_file_paths)
                 for local_real_path, real_path in tqdm(
-                        found_file_paths.items(), total=len(found_file_paths), desc='复制文件'
+                        found_file_paths.items(), total=total, desc='复制文件', disable=total < 3
                 ):
                     assert not exists(local_real_path), \
                         CodingError(f'复制文件的目标路径不应该存在文件：{local_real_path}')
@@ -513,8 +557,11 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             return True
 
         def action_c():
+            count = 1
             for path, (local, db) in path2records.items():
+                print(f'({count}/{len(path2records)})')
                 self._common_path_conflict_query_each_action(dir_path, dir_id, path, local, db)
+                count += 1
             return True
 
         def action_ls(inputs):
