@@ -370,7 +370,7 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
 
         while True:
             inputs = input(prompt).strip()
-            prompt = ''
+            prompt = 'lyl232fm:'
             _, action = exact_response_actions.get(inputs, (None, None))
             if action is not None:
                 if action():

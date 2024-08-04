@@ -850,7 +850,7 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
                     while True:
                         keep = input(
                             '请选择您需要保留的文件记录：输入上述文件记录相应的数字，如果都不保留，输入-1'
-                            '多个选择可用空格分隔，输入"skip"或者"s"可以跳过这次询问'
+                            '多个选择可用空格分隔，输入"skip"或者"s"可以跳过这次询问：'
                         ).strip()
                         try:
                             if keep == 'skip' or keep == 's':

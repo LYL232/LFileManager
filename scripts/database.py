@@ -86,6 +86,7 @@ class ClearDataBaseScript(DataBaseScript):
         while True:
             inputs = input(
                 '在删除前，将会导出所有数据到一个目录，请指定那个目录，并且确认那个目录不存在，默认为当前目录的.lyl232fm/dumped_data\n'
+                'lyl232fm:'
             ).strip()
             if inputs == '':
                 inputs = join(abspath('.'), '.lyl232fm')
