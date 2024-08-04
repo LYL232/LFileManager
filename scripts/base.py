@@ -412,7 +412,7 @@ class FileMD5ComputingScript(DataBaseScript, metaclass=ABCMeta):
         """
         res, batch = [], []
         last_commit_time = time.time()
-        for record in tqdm(records, desc='计算文件md5值'):
+        for record in tqdm(records, desc='计算文件md5值', disable=len(records) < 5):
             record.compute_md5()
             batch.append(record)
             if time.time() - last_commit_time > self.MD5_COMPUTING_SAVE_FREQUENCY:

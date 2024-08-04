@@ -255,9 +255,9 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                     f'该文件大小为{self.human_readable_size(record.size)}，'
                     f'是否在输入数据库前计算md5值？'
             ):
-                created = self.file_md5_computing_transactions(
+                created = sum(self.file_md5_computing_transactions(
                     [record], self.db.new_file_records, dir_id=dir_id,
-                )
+                ))
             else:
                 created = self.transaction(self.db.new_file_records, dir_id=dir_id, file_records=[record])
             assert created == 1, RunTimeError(f'理应插入1条数据库文件记录，但插入了{created}条')
