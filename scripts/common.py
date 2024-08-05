@@ -387,10 +387,10 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         not_exist_path_tags = []
         # 这里假设其他物理位置下的路径的文件都是与数据库一致的
         for tag, path in self.db.managements(dir_id):
-            if samefile(path, dir_path):
-                continue
             if not exists(path):
                 not_exist_path_tags.append(tag)
+                continue
+            if samefile(path, dir_path):
                 continue
             other_dir_paths.append(path)
         if len(not_exist_path_tags):
@@ -451,10 +451,10 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         not_exist_path_tags = []
         # 这里假设其他物理位置下的路径的文件都是与数据库一致的
         for tag, path in self.db.managements(dir_id):
-            if samefile(path, dir_path):
-                continue
             if not exists(path):
                 not_exist_path_tags.append(tag)
+                continue
+            if samefile(path, dir_path):
                 continue
             other_dir_paths.append(path)
         if len(not_exist_path_tags):
