@@ -53,7 +53,7 @@ class BaseScript(metaclass=ABCMeta):
 
     @staticmethod
     def input_query(prompt: str):
-        inputs = input(f'{prompt}\n输入"yes"，"y"，"是"确认执行该动作：').strip()
+        inputs = input(f'{prompt}\n输入"yes"，"y"，"是"确认执行该动作，其他输入将被视为不执行：').strip()
         if inputs == 'y' or inputs == 'yes' or inputs == '是':
             return True
         return False
