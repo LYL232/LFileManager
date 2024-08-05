@@ -361,9 +361,9 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
             action_keys_hint[a_id] = keys_hint
         keys_hints = []
         for key_list, args_hint, hint in action_keys_hint.values():
-            sorted(key_list)
+            key_list.sort()
             keys_hints.append((key_list, args_hint, hint))
-        sorted(keys_hints, key=lambda x: x[0][0])
+        keys_hints.sort(key=lambda x: x[0][0])
         for key_list, args_hint, hint in keys_hints:
             prompt += f'\n{" ".join(key_list)} {args_hint or ""}: {hint}'
         prompt += '\n其他输入将被视为无效输入并将继续询问\n'
