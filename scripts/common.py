@@ -221,7 +221,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             count = 1
             for path in unique_paths:
                 print(f'({count}/{len(unique_paths)})')
-                self._unique_local_records_query_each_action(dir_path, dir_id, path, local_records[path])
+                if self._unique_local_records_query_each_action(dir_path, dir_id, path, local_records[path]):
+                    break
                 count += 1
             return True
 
@@ -250,6 +251,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         """
         print(path)
 
+        abort = False
         def action_a():
             if self.input_query(
                     f'该文件大小为{self.human_readable_size(record.size)}，'
@@ -268,13 +270,20 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             self.remove_single_file(join(dir_path, *(path.split('/')[1:])))
             return True
 
+        def action_abort():
+            nonlocal abort
+            abort = True
+            return True
+
         self.query_actions(
             f'请问对上述本地独有的文件记录需要作何处理？',
             {
                 'a': ('将该文件记录更新到数据库中', action_a),
                 'b': ('【注意！】删除该文件记录对应的文件', action_b),
+                'abort': ('不做改变并结束逐一询问', action_abort)
             }
         )
+        return abort
 
     def _unique_db_records_action(
             self,
@@ -560,7 +569,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             count = 1
             for path, (local, db) in path2records.items():
                 print(f'({count}/{len(path2records)})')
-                self._common_path_conflict_query_each_action(dir_path, dir_id, path, local, db)
+                if self._common_path_conflict_query_each_action(dir_path, dir_id, path, local, db):
+                    break
                 count += 1
             return True
 
@@ -600,6 +610,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             output += f'\n修改时间(本地/数据库)：({local_record.modified_date}/{db_record.modified_date})'
         print(output)
 
+        abort =  False
+
         def action_a():
             updated = sum(self.file_md5_computing_transactions([local_record], self.db.update_file_records))
             print(f'更新了{updated}条数据库记录')
@@ -626,14 +638,22 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 self.remove_single_file(file_real_path)
             return True
 
+        def action_abort():
+            nonlocal abort
+            abort = True
+            return True
+
         self.query_actions(
             f'请问对上述冲突记录需要作何处理？',
             {
                 'a': ('以本地文件记录覆盖数据库中的记录并计算md5值', action_a),
                 'b': ('以本地文件记录覆盖数据库中的记录但不计算md5值', action_b),
                 'c': ('删除本地的文件，并尝试从其他物理位置复制该文件', action_c),
+                'abort': ('不做改变并结束逐一询问', action_abort),
             }
         )
+
+        return abort
 
     def _common_path_match_without_db_md5_action(
             self,
@@ -850,13 +870,15 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
                     while True:
                         keep = input(
                             '请选择您需要保留的文件记录：输入上述文件记录相应的数字，如果都不保留，输入-1'
-                            '多个选择可用空格分隔，输入"skip"或者"s"可以跳过这次询问：'
+                            '多个选择可用空格分隔，输入"skip"或者"s"可以跳过这次询问，输入abort结束询问：'
                         ).strip()
                         try:
-                            if keep == 'skip' or keep == 's':
+                            if keep == 'abort':
+                                return True
+                            elif keep == 'skip' or keep == 's':
                                 keep_ids = set(list(range(len(_ids))))
                                 break
-                            if keep == '-1':
+                            elif keep == '-1':
                                 break
                             for each in keep.split(' '):
                                 each = int(each)
