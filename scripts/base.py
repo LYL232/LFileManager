@@ -336,7 +336,7 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
             [输入] -> (动作说明，动作函数)
         :param cmd_response_actions:
             根据回应应该做的动作，命令式的回应，以字典键作为开头进行匹配，动作是一个接收字符串，返回布尔值的函数，返回True表示退出询问，否则继续询问
-            [输入] -> (动作说明，参数说明，动作函数)
+            [输入] -> (参数说明，动作说明，动作函数)
         :return:
         """
         exact_response_actions = exact_response_actions or {}

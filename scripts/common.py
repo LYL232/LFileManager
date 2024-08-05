@@ -237,7 +237,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 'b': ('【注意！】删除本地的这些文件', action_b),
                 'c': ('每条记录单独询问', action_c),
             },
-            {'ls': ('列出这些文件的目录路径 [写入指定的文件中]', '[写入文件路径（可选）]', action_ls)}
+            {'ls': ('[写入文件路径（可选）]', '列出这些文件的目录路径 [写入指定的文件中]', action_ls)}
         )
 
     def _unique_local_records_query_each_action(self, dir_path: str, dir_id: int, path: str, record: FileRecord):
@@ -341,7 +341,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 'c': ('单独询问每条文件记录', action_c),
             },
             {
-                'ls': ('列出这些文件的目录路径 [写入指定的文件中]', '[写入文件路径（可选）]', action_ls)
+                'ls': ('[写入文件路径（可选）]', '列出这些文件的目录路径 [写入指定的文件中]', action_ls)
             }
         )
 
@@ -595,7 +595,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 'c': ('每条记录单独询问', action_c),
             },
             {
-                'ls': ('列出这些文件的目录路径 [写入指定的文件中]', '[写入文件路径（可选）]', action_ls)
+                'ls': ('[写入文件路径（可选）]', '列出这些文件的目录路径 [写入指定的文件中]', action_ls)
             }
         )
 
@@ -840,7 +840,7 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
         self.query_actions(
             f'共有{len(size2file_ids)}项文件记录至少与其他文件拥有相同的大小。请问需要作何处理？',
             {'a': ('以本地文件记录覆盖数据库中的记录并计算md5值', action_a), },
-            {'ls': ('列出这些文件的目录路径和大小 [写入指定的文件中]', '[写入文件路径（可选）]', action_ls)}
+            {'ls': ('[写入文件路径（可选）]', '列出这些文件的目录路径和大小 [写入指定的文件中]', action_ls)}
         )
 
     def _process_common_size_md5_file_ids(
@@ -863,9 +863,14 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
             for size, md5_dict in size_md5_to_file_records.items():
                 for md5, _ids in md5_dict.items():
                     print(f'大小: {self.human_readable_size(size)}，md5：{md5}')
-                    for i, file_id in enumerate(_ids):
+                    options = []
+                    for file_id in _ids:
                         _record = file_records[file_id]
-                        print(f'【{i}】{all_directory[_record.directory_id].name}:{file_records[file_id].path}')
+                        options.append((
+                            file_id, f'{all_directory[_record.directory_id].name}:{file_records[file_id].path}'))
+                    options.sort(key=lambda x: x[1])
+                    for i, (_, hint) in enumerate(options):
+                        print(f'【{i}】{hint}')
                     keep_ids = set()
                     while True:
                         keep = input(
@@ -888,11 +893,11 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
                         except ValueError:
                             print(f'无法识别输入：{keep}，请重新输入')
                         except AssertionError:
-                            print(f'请输入0至{len(_ids)}的整数')
+                            print(f'请输入0至{len(_ids) - 1}的整数')
                     if len(keep_ids) == len(_ids):
                         continue
                     to_delete = []
-                    for i, file_id in enumerate(_ids):
+                    for i, (file_id, _) in enumerate(options):
                         _record = file_records[file_id]
                         if i not in keep_ids:
                             to_delete.append(_record.file_id)
@@ -922,7 +927,7 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
         self.query_actions(
             f'共有{len(size_md5_to_file_records)}项文件记录至少与其他文件拥有相同的大小和md5值。请问需要作何处理？',
             {'a': ('列出相冲突的文件并询问保留哪条冲突的记录', action_a), },
-            {'ls': ('列出这些文件的目录路径、大小和md5值 [写入指定的文件中]', '[写入文件路径（可选）]', action_ls)}
+            {'ls': ('[写入文件路径（可选）]', '列出这些文件的目录路径、大小和md5值 [写入指定的文件中]', action_ls)}
         )
 
 
