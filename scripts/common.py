@@ -196,6 +196,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         if len(unique_paths) == 0:
             return
 
+        unique_paths = sorted(list(unique_paths))
+
         def action_a():
             file_records = [local_records[each] for each in unique_paths]
             if self.input_query(
@@ -227,7 +229,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             return True
 
         def action_ls(inputs):
-            self.cmd_ls(inputs, sorted(list(unique_paths)))
+            self.cmd_ls(inputs, unique_paths)
             return False
 
         self.query_actions(
@@ -252,6 +254,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         print(path)
 
         abort = False
+
         def action_a():
             if self.input_query(
                     f'该文件大小为{self.human_readable_size(record.size)}，'
@@ -610,7 +613,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             output += f'\n修改时间(本地/数据库)：({local_record.modified_date}/{db_record.modified_date})'
         print(output)
 
-        abort =  False
+        abort = False
 
         def action_a():
             updated = sum(self.file_md5_computing_transactions([local_record], self.db.update_file_records))
@@ -869,8 +872,10 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
                         options.append((
                             file_id, f'{all_directory[_record.directory_id].name}:{file_records[file_id].path}'))
                     options.sort(key=lambda x: x[1])
+                    print('=' * 120)
                     for i, (_, hint) in enumerate(options):
                         print(f'【{i}】{hint}')
+                    print('=' * 120)
                     keep_ids = set()
                     while True:
                         keep = input(
@@ -897,6 +902,8 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
                     if len(keep_ids) == len(_ids):
                         continue
                     to_delete = []
+
+                    print('=' * 120)
                     for i, (file_id, _) in enumerate(options):
                         _record = file_records[file_id]
                         if i not in keep_ids:
@@ -906,6 +913,8 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
                             f'{file_records[file_id].path}',
                             '将被保留' if i in keep_ids else '将被删除'
                         )
+                    print('=' * 120)
+
                     if self.input_query('上述操作将会修改数据库，请确认'):
                         print(
                             f'删除了{self.transaction(self.db.delete_file_record_by_ids, file_ids=to_delete)}'
