@@ -863,7 +863,9 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
         all_directory = self.db.query_directory_by_id(list(all_directory_ids))
 
         def action_a():
-            for size, md5_dict in size_md5_to_file_records.items():
+            size_list = sorted(size_md5_to_file_records.keys(), reverse=True)
+            for size in size_list:
+                md5_dict = size_md5_to_file_records[size]
                 for md5, _ids in md5_dict.items():
                     print(f'大小: {self.human_readable_size(size)}，md5：{md5}')
                     options = []
