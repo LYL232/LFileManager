@@ -228,6 +228,22 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 count += 1
             return True
 
+        def action_remove_all():
+            removing_path = []
+            for path in unique_paths:
+                real_path = join(dir_path, *(path.split('/')[1:]))
+                if not exists(real_path):
+                    continue
+                removing_path.append(real_path)
+                print(real_path)
+            if self.input_query('上述文件将被批量删除，请确认是否删除？') and self.input_query('上述操作无法被恢复，请确认：'):
+                for path in removing_path:
+                    if not exists(path):
+                        continue
+                    os.remove(path)
+                    print(f'已删除：{path}')
+            return True
+
         def action_ls(inputs):
             self.cmd_ls(inputs, unique_paths)
             return False
@@ -237,6 +253,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             {
                 'a': ('将这些文件记录更新到数据库中', action_a),
                 'b': ('【注意！】删除本地的这些文件', action_b),
+                'remove_all': ('【注意！】批量删除本地的这些文件', action_remove_all),
                 'c': ('每条记录单独询问', action_c),
             },
             {'ls': ('[写入文件路径（可选）]', '列出这些文件的目录路径 [写入指定的文件中]', action_ls)}
