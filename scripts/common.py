@@ -324,16 +324,12 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             return
 
         def action_a():
-            ids = [db_records[path].file_id for path in unique_paths]
-            assert all(each is not None for each in ids), CodingError('数据库中的文件记录中的文件id不应该为None')
+            records = [db_records[path] for path in unique_paths]
+            assert all(each.file_id is not None for each in records), CodingError('数据库中的文件记录中的文件id不应该为None')
             for path in sorted(list(unique_paths)):
                 print(path)
             if self.input_query('将删除上述文件在数据库中的记录，是否继续？'):
-                deleted = self.transaction(
-                    self.db.delete_file_record_by_ids,
-                    file_ids=ids
-                )
-                print(f'删除了{deleted}条文件记录')
+                self._query_safely_delete_file_records(records)
             return True
 
         def action_b():
@@ -377,11 +373,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         def action_a():
             assert record.file_id is not None, CodingError('数据库中的文件记录中的文件id不应该为None')
             if self.input_query('将删除文件记录在数据库中的记录，是否继续？'):
-                deleted = self.transaction(
-                    self.db.delete_file_record_by_ids,
-                    file_ids=[record.file_id]
-                )
-                print(f'删除了{deleted}条文件记录')
+                self._query_safely_delete_file_records([record])
             return True
 
         def action_b():
@@ -733,6 +725,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         assert self.db.create_management(dir_id=dir_id, tag=tag, path=dir_path) == 1, RunTimeError('创建管理信息失败！')
 
 
+
+
 class CancelManagementScript(SingleTransactionScript):
     def before_transaction(self, tag: str, *args):
         self.check_empty_args(*args)
@@ -926,7 +920,7 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
                     for i, (file_id, _) in enumerate(options):
                         _record = file_records[file_id]
                         if i not in keep_ids:
-                            to_delete.append(_record.file_id)
+                            to_delete.append(_record)
                         print(
                             f'【{i}】{all_directory[_record.directory_id].name}:'
                             f'{file_records[file_id].path}',
@@ -935,10 +929,7 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
                     print('=' * 120)
 
                     if self.input_query('上述操作将会修改数据库，请确认'):
-                        print(
-                            f'删除了{self.transaction(self.db.delete_file_record_by_ids, file_ids=to_delete)}'
-                            f'条文件记录'
-                        )
+                        self._query_safely_delete_file_records(to_delete)
             return True
 
         def action_ls(inputs):

@@ -1,5 +1,5 @@
 from abc import abstractmethod, ABCMeta
-from typing import Union, List, Dict, Tuple
+from typing import Union, List, Dict, Tuple, Set
 import json
 from json.decoder import JSONDecodeError
 import os
@@ -395,6 +395,41 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
         :return: True
         """
         return True
+
+    def _query_safely_delete_file_records(self, records: List[FileRecord]):
+        """
+        安全地删除文件记录，在文件记录删除前查询其是否是唯一的，如果是唯一的，则询问是否删除
+        :param records: 文件记录
+        :return: None
+        """
+        to_delete = []
+        not_save_to_delete = []
+        for record in records:
+            assert record.md5 != FileRecord.EMPTY_MD5 and record.file_id is not None, \
+                CodingError('检查文件记录是否可以安全删除时需要保证该文件记录的md5值和文件id是有效的')
+            same_ids = set(self.db.query_file_ids_by_size_and_md5(size=record.size, md5=record.md5))
+            file_id = record.file_id
+            assert file_id in same_ids, RunTimeError(f'文件记录与数据库不一致：{record}对应的数据库文件记录不存在')
+            for each in to_delete:
+                if each.file_id in same_ids:
+                    same_ids.remove(each.file_id)
+            same_ids.remove(file_id)
+            to_delete.append(record)
+            if len(same_ids) == 0:
+                not_save_to_delete.append(record)
+
+        if len(to_delete) == 0:
+            return
+        if len(not_save_to_delete) > 0:
+            for record in not_save_to_delete:
+                print(record.path)
+            if self.input_query(f'上述的文件记录内容在数据库中没有记录的备份，请问是否删除这些文件记录？'):
+                to_delete.extend(not_save_to_delete)
+        deleted = self.transaction(
+            self.db.delete_file_record_by_ids,
+            file_ids=[each.file_id for each in to_delete]
+        )
+        print(f'删除了{deleted}条文件记录')
 
 
 class FileMD5ComputingScript(DataBaseScript, metaclass=ABCMeta):

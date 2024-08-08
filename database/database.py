@@ -312,6 +312,15 @@ class Database(metaclass=ABCMeta):
         :return: 查询到的文件记录
         """
 
+    @abstractmethod
+    def query_file_ids_by_size_and_md5(self, size: int, md5: str) -> List[int]:
+        """
+        根据指定的md5值查询所有的文件记录
+        :param size: 指定的大小
+        :param md5: 指定的md5值
+        :return: 文件记录的id列表
+        """
+
 
 class MysqlTransaction(Transaction):
     def __init__(self, connection: Connection):
@@ -851,3 +860,19 @@ class MysqlDataBase(Database):
                     directory_id=int(res[7])
                 ))
             return file_records
+
+    def query_file_ids_by_size_and_md5(self, size: int, md5: str) -> List[int]:
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT id FROM file WHERE `size` = %s and md5 = %s;
+                """,
+                (size, md5,)
+            )
+            file_ids = []
+            while True:
+                res = cursor.fetchone()
+                if res is None:
+                    break
+                file_ids.append(int(res[0]))
+            return file_ids
