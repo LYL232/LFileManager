@@ -240,8 +240,11 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 for path in removing_path:
                     if not exists(path):
                         continue
-                    os.remove(path)
-                    print(f'已删除：{path}')
+                    try:
+                        os.remove(path)
+                        print(f'已删除：{path}')
+                    except Exception as e:
+                        print(f'无法删除：{path}，原因是：{e}')
             return True
 
         def action_ls(inputs):
@@ -723,8 +726,6 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             self.db.update_management(tag=tag, path=dir_path)
             return
         assert self.db.create_management(dir_id=dir_id, tag=tag, path=dir_path) == 1, RunTimeError('创建管理信息失败！')
-
-
 
 
 class CancelManagementScript(SingleTransactionScript):
