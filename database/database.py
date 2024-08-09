@@ -43,6 +43,7 @@ ALL_TABLES = {
                 UNIQUE file_path_index(dir_id, dir_path, `name`, suffix), 
                 INDEX file_size_index(`size`),
                 INDEX file_md5_index(md5),
+                INDEX file_same_index(`size`, md5),
                 INDEX file_modified_timestamp_index(modified_timestamp),
                 CONSTRAINT file_fk FOREIGN KEY (dir_id) REFERENCES directory(id)
             );
@@ -315,7 +316,7 @@ class Database(metaclass=ABCMeta):
     @abstractmethod
     def query_file_ids_by_size_and_md5(self, size: int, md5: str) -> List[int]:
         """
-        根据指定的md5值查询所有的文件记录
+        根据指定的md5值查询所有的文件记录id
         :param size: 指定的大小
         :param md5: 指定的md5值
         :return: 文件记录的id列表

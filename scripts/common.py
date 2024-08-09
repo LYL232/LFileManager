@@ -1010,3 +1010,73 @@ class FindInSuffixScript(FindInColumnScript):
 
     def _col_name(self) -> str:
         return 'suffix'
+
+
+class QueryDirectoryFileRecordsExistenceScript(FileMD5ComputingScript):
+    def __call__(
+            self,
+            path: str = '.',
+            md5cache_path: str = '.lyl232fm/md5cache.log',
+            in_db_path: str = '.lyl232fm/fr_in_db.log',
+            not_in_db_path: str = '.lyl232fm/fr_not_in_db.log',
+            *args
+    ) -> int:
+        """
+        查询path下的所有文件是否已经存在于数据库里
+        :param path: 该路径下的所有文件将被检查是否被数据库里的文件记录覆盖
+        :param in_db_path: 输出文件：path下存在数据库中的文件记录
+        :param not_in_db_path: 输出文件：path下不存在数据库中的文件记录
+        :return: 0表示正常
+        """
+        self.check_empty_args(*args)
+        self.init_db_if_needed()
+
+        md5_cache = {}
+
+        os.makedirs(abspath(dirname(md5cache_path)), exist_ok=True)
+
+        if exists(md5cache_path):
+            try:
+                with open(md5cache_path, 'r', encoding='utf8') as file:
+                    for line in file.readlines():
+                        p, md5 = line.strip().split('\\')
+                        md5_cache[p] = md5
+            except Exception as e:
+                RunTimeError(f'读取MD5缓存文件：{md5cache_path}失败，原因是{e}，请删除手动删除该文件')
+        else:
+            os.makedirs(abspath(dirname(in_db_path)), exist_ok=True)
+
+        os.makedirs(abspath(dirname(in_db_path)), exist_ok=True)
+        os.makedirs(abspath(dirname(not_in_db_path)), exist_ok=True)
+
+        records = FileRecord.get_dir_file_records(abspath(path))
+        if len(records) == 0:
+            return
+        with open(in_db_path, 'w', encoding='utf8') as in_db_file:
+            with open(not_in_db_path, 'w', encoding='utf8') as not_in_db_file:
+                with open(md5cache_path, 'a+', encoding='utf8') as md5cache_file:
+                    self._batch_check_record_in_db(
+                        records, in_db_file, not_in_db_file,
+                        md5cache_file, md5_cache
+                    )
+        print(f'在数据库中的文件记录已经写入：{in_db_path}')
+        print(f'不在数据库中的文件记录已经写入：{not_in_db_path}')
+        print(f'已经计算的文件的md5值缓存在：{md5cache_path}')
+
+    def _batch_check_record_in_db(
+            self, records: List[FileRecord],
+            in_db_file, not_in_db_file, md5cache_file,
+            md5_cache: Dict[str, str]
+    ):
+        for record in tqdm(records, desc='检查文件中'):
+            path = record.path
+            if path in md5_cache.keys():
+                md5 = md5_cache[path]
+            else:
+                md5 = record.compute_md5()
+                md5cache_file.write(f'{path}\\{md5}\n')
+            res = self.db.query_file_ids_by_size_and_md5(record.size, md5)
+            if len(res) > 0:
+                in_db_file.write(f'{path}\n')
+            else:
+                not_in_db_file.write(f'{path}\n')

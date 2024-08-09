@@ -10,7 +10,8 @@ from .common import (
     DumpDatabaseScript,
     QueryRedundantFileScript,
     QuerySizeScript,
-    FindInFileDirectorPathScript, FindInNameScript, FindInSuffixScript
+    FindInFileDirectorPathScript, FindInNameScript, FindInSuffixScript,
+    QueryDirectoryFileRecordsExistenceScript
 )
 
 SCRIPTS = {
@@ -28,4 +29,5 @@ SCRIPTS = {
     'fid': FindInFileDirectorPathScript,
     'fin': FindInNameScript,
     'fis': FindInSuffixScript,
+    'qde': QueryDirectoryFileRecordsExistenceScript,
 }
