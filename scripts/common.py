@@ -492,7 +492,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                         found_file_paths.items(), total=total, desc='复制文件', disable=total < 3
                 ):
                     assert not exists(local_real_path), \
-                        CodingError(f'复制文件的目标路径不应该存在文件：{local_real_path}')
+                        CodingError(f'复制文件的目标路径不应该存在文件：{local_real_path}，'
+                                    f'请检查是否是由于Windows默认路径不区分大小写造成的')
                     os.makedirs(os.path.dirname(local_real_path), exist_ok=True)
                     shutil.copy2(real_path, local_real_path)
         if len(not_found_paths) > 0:
