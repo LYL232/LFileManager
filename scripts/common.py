@@ -173,8 +173,10 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         current_unique = current_paths - db_file_path
         db_unique = db_file_path - current_paths
 
-        self._common_path_records_action(dir_path, dir_id, common_path, local_records, db_records)
-
+        deleted_records = self._common_path_records_action(dir_path, dir_id, common_path, local_records, db_records)
+        # 在上个动作中删除的本地文件记录添加到数据库缺失的文件中
+        for each in deleted_records:
+            db_unique.add(each.path)
         self._unique_db_records_action(dir_path, dir_id, db_unique, db_records)
         self._unique_local_records_action(dir_path, dir_id, current_unique, local_records)
 
@@ -509,7 +511,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             common_path: Set[str],
             local_records: Dict[str, FileRecord],
             db_records: Dict[str, FileRecord]
-    ):
+    ) -> List[FileRecord]:
         """
         对现有文件记录与数据库文件记录中路径相同的部分的动作
         :param dir_path: 当前操作的目录路径
@@ -517,48 +519,48 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         :param common_path: 两者相同路径的集合
         :param local_records: 当前的文件记录
         :param db_records: 数据库中的文件记录
-        :return:
+        :return: 如果删除了本地文件，则返回这些被删除的文件记录
         """
         if len(common_path) == 0:
-            return
+            return []
+
         conflict, match_with_md5, match_wo_md5 = {}, {}, {}
         for path in common_path:
             record_pair = (local_record, db_record) = (local_records[path], db_records[path])
             local_record.file_id = db_record.file_id
             db_record.dir_physical_path = local_record.dir_physical_path
-            if local_record.size == db_record.size:
-                if local_record.modified_time == db_record.modified_time:
-                    if db_record.md5 != FileRecord.EMPTY_MD5:
-                        # 如果数据库中有md5记录
-                        match_with_md5[path] = record_pair
-                    else:
-                        # 如果数据库中没有md5记录则在之后询问是否计算这些文件的md5值
-                        match_wo_md5[path] = record_pair
+            if local_record.size == db_record.size and local_record.modified_time == db_record.modified_time:
+                if db_record.md5 != FileRecord.EMPTY_MD5:
+                    # 如果数据库中有md5记录
+                    match_with_md5[path] = record_pair
                 else:
-                    conflict[path] = record_pair
+                    # 如果数据库中没有md5记录则在之后询问是否计算这些文件的md5值
+                    match_wo_md5[path] = record_pair
             else:
                 conflict[path] = record_pair
 
         self._common_path_match_without_db_md5_action(match_wo_md5)
         conflict.update(self._common_path_match_with_db_md5_action(match_with_md5))
 
-        self._common_path_conflict_action(dir_path, dir_id, conflict)
+        return self._common_path_conflict_action(dir_path, dir_id, conflict)
 
     def _common_path_conflict_action(
             self,
             dir_path: str,
             dir_id: int,
             path2records: Dict[str, Tuple[FileRecord, FileRecord]]
-    ):
+    ) -> List[FileRecord]:
         """
         拥有相同路径的本地文件记录与数据库文件记录相冲突的文件记录对
         :param dir_path: 当前操作的目录路径
         :param dir_id: 当前操作的目录路径
         :param path2records: 路径到记录对的映射
-        :return:
+        :return: 如果删除了本地文件，则返回这些被删除的文件记录
         """
+        deleted_records = []
+
         if len(path2records) == 0:
-            return
+            return deleted_records
 
         def action_a():
             for each in sorted(list(path2records.keys())):
@@ -566,25 +568,27 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             if not self.input_query('上述文件记录将被计算md5值并更新入数据库。是否继续？'):
                 return False
             records = [local_record for local_record, _ in path2records.values()]
-            updated = sum(self.file_md5_computing_transactions(records, self.db.update_file_records))
+            if self.input_query('是否计算这些文件的md5值？'):
+                updated = sum(self.file_md5_computing_transactions(records, self.db.update_file_records))
+            else:
+                updated = self.transaction(self.db.update_file_records, file_records=records)
             print(f'更新了{updated}条数据库记录')
             return True
 
         def action_b():
-            for each in sorted(list(path2records.keys())):
-                print(each)
-            if not self.input_query('上述文件记录更新入数据库。是否继续？'):
-                return False
-            records = [local_record for local_record, _ in path2records.values()]
-            updated = self.transaction(self.db.update_file_records, file_records=records)
-            print(f'更新了{updated}条数据库记录')
+            for local_record, _ in path2records.values():
+                if self.remove_single_file(join(dir_path, *(local_record.path.split('/')[1:]))):
+                    deleted_records.append(local_record)
             return True
 
         def action_c():
             count = 1
             for path, (local, db) in path2records.items():
                 print(f'({count}/{len(path2records)})')
-                if self._common_path_conflict_query_each_action(dir_path, dir_id, path, local, db):
+                abort, deleted = self._common_path_conflict_query_each_action(dir_path, dir_id, path, local, db)
+                if deleted:
+                    deleted_records.append(local)
+                if abort:
                     break
                 count += 1
             return True
@@ -602,17 +606,39 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             self.cmd_ls(inputs, outputs)
             return False
 
+        def action_remove_all():
+            removing_records = []
+            for local_record, _ in path2records.values():
+                real_path = join(dir_path, *(local_record.path.split('/')[1:]))
+                if not exists(real_path):
+                    continue
+                removing_records.append((local_record, real_path))
+                print(real_path)
+            if self.input_query('上述文件将被批量删除，请确认是否删除？') and self.input_query('上述操作无法被恢复，请确认：'):
+                for record, real_path in removing_records:
+                    if not exists(real_path):
+                        continue
+                    try:
+                        os.remove(real_path)
+                        deleted_records.append(record)
+                        print(f'已删除：{real_path}')
+                    except Exception as e:
+                        print(f'无法删除：{real_path}，原因是：{e}')
+            return True
+
         self.query_actions(
             f'【注意！】共有{len(path2records)}项本地文件记录的文件与数据库中相应记录冲突：请问需要作何处理？',
             {
-                'a': ('以本地文件记录覆盖数据库中的记录并计算md5值', action_a),
-                'b': ('以本地文件记录覆盖数据库中的记录但不计算md5值', action_b),
+                'a': ('以本地文件记录覆盖数据库中的记录', action_a),
+                'b': ('【注意！】删除本地的这些文件', action_b),
+                'remove_all': ('【注意！】批量删除本地的这些文件', action_remove_all),
                 'c': ('每条记录单独询问', action_c),
             },
             {
                 'ls': ('[写入文件路径（可选）]', '列出这些文件的目录路径 [写入指定的文件中]', action_ls)
             }
         )
+        return deleted_records
 
     def _common_path_conflict_query_each_action(
             self, dir_path: str, dir_id: int, path: str,
@@ -626,6 +652,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         print(output)
 
         abort = False
+        deleted_local_record = False
 
         def action_a():
             updated = sum(self.file_md5_computing_transactions([local_record], self.db.update_file_records))
@@ -633,8 +660,9 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             return True
 
         def action_b():
-            updated = self.transaction(self.db.update_file_records, file_records=[local_record])
-            print(f'更新了{updated}条数据库记录')
+            nonlocal deleted_local_record
+            if self.remove_single_file(join(dir_path, *(local_record.path.split('/')[1:]))):
+                deleted_local_record = True
             return True
 
         def action_c():
@@ -668,7 +696,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             }
         )
 
-        return abort
+        return abort, deleted_local_record
 
     def _common_path_match_without_db_md5_action(
             self,

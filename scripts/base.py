@@ -1,5 +1,5 @@
 from abc import abstractmethod, ABCMeta
-from typing import Union, List, Dict, Tuple, Set
+from typing import Union, List, Dict, Tuple
 import json
 from json.decoder import JSONDecodeError
 import os
@@ -136,14 +136,14 @@ class BaseScript(metaclass=ABCMeta):
             RunTimeError(f'创建本程序管理目录：{fm_dir}出错，具体异常为：\n{e}')
 
     @classmethod
-    def remove_single_file(cls, path: str):
+    def remove_single_file(cls, path: str) -> bool:
         """
         删除单个文件，并检查父目录是否为空，如果为空则询问是否删除
         :param path: 需要删除的文件目录
-        :return:
+        :return: 是否删除了文件
         """
         if not cls.input_query(f'将删除：{path}，是否继续？'):
-            return
+            return False
         os.remove(path)
         dir_path = dirname(path)
         while exists(dir_path) and len(os.listdir(dir_path)) == 0:
@@ -151,6 +151,7 @@ class BaseScript(metaclass=ABCMeta):
                 break
             os.rmdir(dir_path)
             dir_path = dirname(dir_path)
+        return True
 
     @classmethod
     def check_empty_dir(cls, path: str) -> bool:
