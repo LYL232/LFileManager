@@ -566,7 +566,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         def action_a():
             for each in sorted(list(path2records.keys())):
                 print(each)
-            if not self.input_query('上述文件记录将被计算md5值并更新入数据库。是否继续？'):
+            if not self.input_query('上述文件记录更新至数据库。是否继续？'):
                 return False
             records = [local_record for local_record, _ in path2records.values()]
             if self.input_query('是否计算这些文件的md5值？'):
