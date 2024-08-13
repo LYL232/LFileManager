@@ -1,9 +1,9 @@
 from abc import abstractmethod, ABCMeta
-from typing import Union, List, Dict, Tuple
+from typing import Union, List, Dict, Tuple, Set
 import json
 from json.decoder import JSONDecodeError
 import os
-from os.path import join, dirname, exists, isdir, abspath
+from os.path import join, dirname, exists, isdir, abspath, samefile
 import time
 from tqdm import tqdm
 
@@ -262,6 +262,22 @@ class BaseScript(metaclass=ABCMeta):
             current_path = next_path
         return None
 
+    @staticmethod
+    def _find_single_file_in_managements(
+            record, management_paths: List[str]
+    ) -> Tuple[Dict[str, str], Set[str]]:
+        """
+        在其他的管理记录中找到有效的指定文件记录的备份
+        :param record: 需要操作的文件记录
+        :param management_paths: 目录有效的物理路径
+        :return: ([本地路径->其他有效备份的路径], {找不到的路径})
+        """
+        for dp in management_paths:
+            real_path = join(dp, *(record.path.split('/')[1:]))
+            if exists(real_path):
+                return real_path
+        return None
+
 
 class DataBaseScript(BaseScript, metaclass=ABCMeta):
     def __init__(self, database_config: Union[str, dict], *args, database: Database = None, **kwargs):
@@ -431,6 +447,27 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
             file_ids=[each.file_id for each in to_delete]
         )
         print(f'删除了{deleted}条文件记录')
+
+    def _get_valid_management_paths(self, dir_id: int, except_path: str = None) -> List[str]:
+        """
+        获取指定目录有效的物理路径
+        :param dir_id: 目录id
+        :param except_path: 要去除的目录路径（返回的结果将不包含该目录路径），如果是None，则跳过
+        :return: 其他有效的物理路径
+        """
+        other_dir_paths = []
+        not_exist_path_tags = []
+        # 这里假设其他物理位置下的路径的文件都是与数据库一致的
+        for tag, path in self.db.managements(dir_id):
+            if not exists(path):
+                not_exist_path_tags.append(tag)
+                continue
+            if except_path is not None and samefile(path, except_path):
+                continue
+            other_dir_paths.append(path)
+        if len(not_exist_path_tags):
+            self.transaction(self.db.reset_management_path, tags=not_exist_path_tags)
+        return other_dir_paths
 
 
 class FileMD5ComputingScript(DataBaseScript, metaclass=ABCMeta):

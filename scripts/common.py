@@ -393,27 +393,6 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             }
         )
 
-    def _get_valid_other_management_paths(self, dir_path: str, dir_id: int) -> List[str]:
-        """
-        获取指定目录其他有效的物理路径
-        :param dir_path: 正在操作的目录路径（返回的结果将不包含该目录路径）
-        :param dir_id: 目录id
-        :return: 其他有效的物理路径
-        """
-        other_dir_paths = []
-        not_exist_path_tags = []
-        # 这里假设其他物理位置下的路径的文件都是与数据库一致的
-        for tag, path in self.db.managements(dir_id):
-            if not exists(path):
-                not_exist_path_tags.append(tag)
-                continue
-            if samefile(path, dir_path):
-                continue
-            other_dir_paths.append(path)
-        if len(not_exist_path_tags):
-            self.transaction(self.db.reset_management_path, tags=not_exist_path_tags)
-        return other_dir_paths
-
     def _find_file_in_other_managements(
             self, dir_path: str, dir_id: int, records: List[FileRecord]
     ) -> Tuple[Dict[str, str], Set[str]]:
@@ -424,35 +403,19 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         :param records: 需要操作的文件记录列表
         :return: ([本地路径->其他有效备份的路径], {找不到的路径})
         """
-        other_dir_paths = self._get_valid_other_management_paths(dir_path, dir_id)
+        other_dir_paths = self._get_valid_management_paths(dir_id, except_path=dir_path)
 
         found_file_paths, not_found_paths = {}, set()
         # 尝试寻找所有的文件路径
         for record in records:
             path = record.path
-            found = self._find_single_file_in_other_managements(record, other_dir_paths)
+            found = self._find_single_file_in_managements(record, other_dir_paths)
             local_real_path = join(dir_path, *(path.split('/')[1:]))
             if found is None:
                 not_found_paths.add(path)
             else:
                 found_file_paths[local_real_path] = found
         return found_file_paths, not_found_paths
-
-    @staticmethod
-    def _find_single_file_in_other_managements(
-            record, other_dir_paths: List[str]
-    ) -> Tuple[Dict[str, str], Set[str]]:
-        """
-        在其他的管理记录中找到有效的指定文件记录的备份
-        :param record: 需要操作的文件记录
-        :param other_dir_paths: 本目录其他有效的物理路径
-        :return: ([本地路径->其他有效备份的路径], {找不到的路径})
-        """
-        for dp in other_dir_paths:
-            real_path = join(dp, *(record.path.split('/')[1:]))
-            if exists(real_path):
-                return real_path
-        return None
 
     def _unique_db_records_copy_from_others(
             self, dir_path, dir_id: int, records: List[FileRecord]
@@ -667,9 +630,9 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             return True
 
         def action_c():
-            other_dir_paths = self._get_valid_other_management_paths(dir_path, dir_id)
+            other_dir_paths = self._get_valid_management_paths(dir_id, except_path=dir_path)
             real_split_path = (path.split('/')[1:])
-            file_other_real_path = self._find_single_file_in_other_managements(local_record, other_dir_paths)
+            file_other_real_path = self._find_single_file_in_managements(local_record, other_dir_paths)
             file_real_path = join(dir_path, *real_split_path)
             if file_other_real_path is not None:
                 if not self.input_query(
@@ -860,9 +823,41 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
         all_directory = None
 
         def action_a():
-            updated = sum(self.file_md5_computing_transactions(
-                list(file_records.values()), self.db.update_file_records))
-            print(f'更新了{updated}条数据库记录')
+            dir_id2records = {}  # 根据目录id分类文件记录
+            for record in file_records.values():
+                dir_id = record.directory_id
+                if dir_id not in dir_id2records.keys():
+                    dir_records = dir_id2records[dir_id] = []
+                else:
+                    dir_records = dir_id2records[dir_id]
+                dir_records.append(record)
+
+            found_records, not_found_records = [], []
+            for dir_id, records in dir_id2records.items():
+                dir_paths = self._get_valid_management_paths(dir_id)
+                # 尝试寻找所有的文件路径
+                for record in records:
+                    found = False
+                    for dp in dir_paths:
+                        real_path = join(dp, *(record.path.split('/')[1:]))
+                        if exists(real_path):
+                            record.dir_physical_path = dp
+                            found_records.append(record)
+                            found = True
+                            break
+                    if not found:
+                        not_found_records.append(record)
+
+            if len(not_found_records) > 0:
+                nonlocal all_directory
+                if all_directory is None:
+                    all_directory = self.db.query_directory_by_id(list(dir_id2records.keys()))
+                for record in not_found_records:
+                    print(f'{all_directory[record.directory_id].name}:{record.path}')
+                input('【注意！】上述文件无法找到对应的物理路径，按下回车以继续')
+            if len(found_records) > 0:
+                updated = sum(self.file_md5_computing_transactions(found_records, self.db.update_file_records))
+                print(f'更新了{updated}条数据库记录')
             return True
 
         def action_ls(inputs):
@@ -882,8 +877,8 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
             return False
 
         self.query_actions(
-            f'共有{len(size2file_ids)}项文件记录至少与其他文件拥有相同的大小。请问需要作何处理？',
-            {'a': ('以本地文件记录覆盖数据库中的记录并计算md5值', action_a), },
+            f'共有{len(size2file_ids)}项文件记录至少与其他文件拥有相同的大小而且数据库中没有md5值。请问需要作何处理？',
+            {'a': ('计算md5值之后更新入数据库', action_a), },
             {'ls': ('[写入文件路径（可选）]', '列出这些文件的目录路径和大小 [写入指定的文件中]', action_ls)}
         )
 
