@@ -384,7 +384,7 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
         for key_list, args_hint, hint in keys_hints:
             prompt += f'\n{" ".join(key_list)} {args_hint or ""}: {hint}'
         prompt += '\n其他输入将被视为无效输入并将继续询问\n'
-        prompt = '=' * 120 + '\n【询问】：' + prompt + '=' * 120
+        prompt = '=' * 120 + '\n【询问】：' + prompt + '=' * 120 + '\nlyl232fm:'
 
         while True:
             inputs = input(prompt).strip()
