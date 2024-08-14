@@ -359,7 +359,7 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
         exact_response_actions = exact_response_actions or {}
         cmd_response_actions = cmd_response_actions or {}
         assert len(exact_response_actions) + len(cmd_response_actions) > 0, CodingError('请至少给一个回应动作')
-        skip_action = ('无视并不再询问', cls._query_action_skip)
+        skip_action = ('无视该询问', cls._query_action_skip)
         exact_response_actions.update(s=skip_action, skip=skip_action)
 
         # 生成提示
@@ -384,6 +384,7 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
         for key_list, args_hint, hint in keys_hints:
             prompt += f'\n{" ".join(key_list)} {args_hint or ""}: {hint}'
         prompt += '\n其他输入将被视为无效输入并将继续询问\n'
+        prompt = '=' * 120 + '\n【询问】：' + prompt + '=' * 120
 
         while True:
             inputs = input(prompt).strip()

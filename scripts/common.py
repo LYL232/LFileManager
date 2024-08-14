@@ -362,7 +362,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             count = 1
             for path in unique_paths:
                 print(f'({count}/{len(unique_paths)})')
-                self._unique_db_records_query_each_action(dir_path, dir_id, path, db_records[path])
+                if self._unique_db_records_query_each_action(dir_path, dir_id, path, db_records[path]):
+                    break
                 count += 1
             return True
 
@@ -388,8 +389,10 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             dir_id: int,
             path: str,
             record: FileRecord
-    ):
+    ) -> bool:
         print(path)
+
+        abort = False
 
         def action_a():
             assert record.file_id is not None, CodingError('数据库中的文件记录中的文件id不应该为None')
@@ -408,13 +411,20 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             self._unique_db_records_copy_from_others(dir_path, dir_id, [record])
             return True
 
+        def action_abort():
+            nonlocal abort
+            abort = True
+            return True
+
         self.query_actions(
             f'请问对上述冲突记录需要作何处理？',
             {
                 'a': ('【注意！】删除数据库中的该文件记录', action_a),
                 'b': ('尝试从其他同目录的受管理物理位置复制该文件到本地', action_b),
+                'abort': ('直接跳过逐个询问', action_abort),
             }
         )
+        return abort
 
     def _find_file_in_other_managements(
             self, dir_path: str, dir_id: int, records: List[FileRecord]
