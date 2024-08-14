@@ -442,9 +442,17 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
                 print(record.path)
             if self.input_query(f'上述的文件记录内容在数据库中没有记录的备份，请问是否删除这些文件记录？'):
                 to_delete.extend(not_save_to_delete)
+        self._delete_file_records(to_delete)
+
+    def _delete_file_records(self, records: List[FileRecord]):
+        """
+        安全地删除文件记录，在文件记录删除前查询其是否是唯一的，如果是唯一的，则询问是否删除
+        :param records: 文件记录
+        :return: None
+        """
         deleted = self.transaction(
             self.db.delete_file_record_by_ids,
-            file_ids=[each.file_id for each in to_delete]
+            file_ids=[each.file_id for each in records]
         )
         print(f'删除了{deleted}条文件记录')
 

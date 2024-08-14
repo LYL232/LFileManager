@@ -329,12 +329,28 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             return
 
         def action_a():
-            records = [db_records[path] for path in unique_paths]
+            sorted_paths = sorted(list(unique_paths))
+            records = [db_records[path] for path in sorted_paths]
             assert all(each.file_id is not None for each in records), CodingError('数据库中的文件记录中的文件id不应该为None')
-            for path in sorted(list(unique_paths)):
-                print(path)
-            if self.input_query('将删除上述文件在数据库中的记录，是否继续？'):
-                self._query_safely_delete_file_records(records)
+            no_md5_records, md5_records = [], []
+            for each in records:
+                if each.md5 == FileRecord.EMPTY_MD5:
+                    no_md5_records.append(each)
+                else:
+                    md5_records.append(each)
+            if len(no_md5_records) > 0:
+                for each in no_md5_records:
+                    print(each.path)
+                if self.input_query(
+                        '上述文件在数据库中没有MD5值记录，如果删除将无法自动检查是否还有相同内容的文件记录在数据库中，'
+                        '是否删除这些文件记录？'
+                ):
+                    self._delete_file_records(no_md5_records)
+            if len(md5_records) > 0:
+                for each in md5_records:
+                    print(each.path)
+                if self.input_query('将删除上述文件在数据库中的记录，是否继续？'):
+                    self._delete_file_records(md5_records)
             return True
 
         def action_b():
@@ -377,8 +393,15 @@ class ManageDirectoryScript(FileMD5ComputingScript):
 
         def action_a():
             assert record.file_id is not None, CodingError('数据库中的文件记录中的文件id不应该为None')
-            if self.input_query('将删除文件记录在数据库中的记录，是否继续？'):
-                self._query_safely_delete_file_records([record])
+            if record.md5 == FileRecord.EMPTY_MD5:
+                if self.input_query('将删除文件记录在数据库中的记录，是否继续？'):
+                    self._query_safely_delete_file_records([record])
+            else:
+                if self.input_query(
+                        '该文件在数据库中没有MD5值记录，如果删除将无法自动检查是否还有相同内容的文件记录在数据库中，'
+                        '是否删除该文件记录？'
+                ):
+                    self._delete_file_records([record])
             return True
 
         def action_b():
