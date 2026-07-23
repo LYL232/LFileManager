@@ -26,8 +26,8 @@ class MakeDirectoryScript(SingleTransactionScript):
         :param desc: 目录描述
         :return: 0表示正常
         """
-        assert not self.db.directory_id(name) is not None, OperationError(f'目录名字：{name}已经被创建')
-        self.db.make_directory(name, desc)
+        assert not self.db.repository_id(name) is not None, OperationError(f'目录名字：{name}已经被创建')
+        self.db.new_repository(name, desc)
         return 0
 
 
@@ -57,10 +57,10 @@ class QueryDirectoryScript(DataBaseScript):
         self.check_empty_args(*args)
         self.init_db_if_needed()
         if name is None:
-            for directory in self.db.directories():
+            for directory in self.db.repositories():
                 print(f'目录：{directory.name}，描述：{directory.desc}，id：{directory.dir_id}')
         else:
-            assert self.db.directory_id(name) is not None, OperationError(f'目录名字：{name}不存在')
+            assert self.db.repository_id(name) is not None, OperationError(f'目录名字：{name}不存在')
             for tag, path in self.db.managements(name):
                 if exists(path):
                     print(f'标识：{tag}，路径：{path}')
@@ -87,8 +87,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         dir_id, dir_path = self.maintain_management(dir_path, name, tag)
 
         # 获取当前目录的所有文件信息记录
-        db_records = self.db.file_records(dir_id)
-        local_records = FileRecord.get_dir_file_records(dir_path)
+        db_records = self.db.repository_file_records(dir_id)
+        local_records = FileRecord.get_dir_file_instances(dir_path)
         if len(db_records) == 0:
             total_size = sum(each.size for each in local_records)
             if self.input_query(
@@ -123,9 +123,9 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             assert name is not None, OperationError(f'目录名字缺失，而且目标路径{dir_path}不存在.lyl232fm文件夹，无法操作')
             assert tag is not None, OperationError(f'目录管理标识缺失，而且目标路径{dir_path}不存在.lyl232fm文件夹，无法操作')
 
-            dir_id = self.db.directory_id(name)
+            dir_id = self.db.repository_id(name)
             assert dir_id is not None, OperationError(f'管理目录名字{name}并未被注册，无法关联，请使用mkdir脚本创建新的管理目录')
-            assert not self.db.tag_exists(tag), OperationError(f'标识：{tag}已经存在，无法关联')
+            assert not self.db.is_repository_instance_exists(tag), OperationError(f'标识：{tag}已经存在，无法关联')
             self._write_manage_info(dir_path, name, tag)
             self.transaction(self._create_or_update_management, dir_id=dir_id, tag=tag, dir_path=dir_path)
         else:
@@ -145,7 +145,7 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                 )
             # 更新数据库中管理的path字段
             name, tag = name or info['name'], tag or info['tag']
-            dir_id = self.db.directory_id(name)
+            dir_id = self.db.repository_id(name)
             self.transaction(self._create_or_update_management, dir_id=dir_id, tag=tag, dir_path=dir_path)
             assert dir_id is not None, OperationError(f'管理目录名字{name}并未被注册，无法关联，请使用mkdir脚本创建新的管理目录')
         return dir_id, dir_path
@@ -746,11 +746,11 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         return res
 
     def _create_or_update_management(self, dir_id: int, tag: str, dir_path):
-        if self.db.tag_exists(tag):
+        if self.db.is_repository_instance_exists(tag):
             # 存在记录则更新
             self.db.update_management(tag=tag, path=dir_path)
             return
-        assert self.db.create_management(dir_id=dir_id, tag=tag, path=dir_path) == 1, RunTimeError('创建管理信息失败！')
+        assert self.db.new_repository_instance(dir_id=dir_id, tag=tag, path=dir_path) == 1, RunTimeError('创建管理信息失败！')
 
 
 class CancelManagementScript(SingleTransactionScript):
@@ -764,9 +764,9 @@ class CancelManagementScript(SingleTransactionScript):
         :param tag: 管理标识，不能与其他管理标识重复
         :return: 0表示正常
         """
-        path = self.db.management_physical_path(tag)
+        path = self.db.repository_instance_path(tag)
         assert path is not None, OperationError(f'标识：{tag}不存在')
-        if self.db.cancel_management(tag) == 0:
+        if self.db.remove_repository_instance(tag) == 0:
             return 1
         fm_path = join(path, '.lyl232fm')
         if exists(fm_path):
@@ -790,7 +790,7 @@ class QueryFileRecordScript(DataBaseScript):
         self.check_empty_args(*args)
         self.init_db_if_needed()
         dir_id = self.get_directory_id_by_name_or_local(name)
-        outputs = self.file_record_output_lines(self.db.file_records(dir_id))
+        outputs = self.file_record_output_lines(self.db.repository_file_records(dir_id))
         self.write_or_output_lines_to_file(outputs, write_path)
         return 0
 
@@ -802,7 +802,7 @@ class DumpDatabaseScript(DataBaseScript):
         os.makedirs(out_dir)
         self.write_csv(
             join(out_dir, 'directory.csv'),
-            [(record.dir_id, record.name, record.desc) for record in self.db.directories()],
+            [(record.dir_id, record.name, record.desc) for record in self.db.repositories()],
             headers=['id', 'name', 'des']
         )
         self.write_csv(
@@ -825,7 +825,7 @@ class DumpDatabaseScript(DataBaseScript):
                     record.suffix, record.md5, record.size,
                     record.directory_id, record.modified_time
                 )
-                for record in self.db.all_files()
+                for record in self.db.all_file_records()
             ],
             headers=['id', 'dir_path', 'name', 'suffix', 'md5', 'size', 'dir_id', 'modified_timestamp']
         )
@@ -835,7 +835,7 @@ class DumpDatabaseScript(DataBaseScript):
 class QueryRedundantFileScript(FileMD5ComputingScript):
     def __call__(self, *args):
         self.check_empty_args(*args)
-        self._process_common_size_file_ids(self.db.query_common_size_wo_md5_files())
+        self._process_common_size_file_ids(self.db.query_common_size_without_md5_files())
         self._process_common_size_md5_file_ids(self.db.query_common_md5_files())
 
     def _process_common_size_file_ids(
@@ -884,9 +884,9 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
             if len(not_found_records) > 0:
                 nonlocal all_directory
                 if all_directory is None:
-                    all_directory = self.db.query_directory_by_id(list(dir_id2records.keys()))
+                    all_directory = self.db.query_repository_by_id(list(dir_id2records.keys()))
                 for record in not_found_records:
-                    print(f'{all_directory[record.directory_id].name}:{record.path}')
+                    print(f'{all_directory[record.repository_id].name}:{record.path}')
                 input('【注意！】上述文件无法找到对应的物理路径，按下回车以继续')
             if len(found_records) > 0:
                 updated = sum(self.file_md5_computing_transactions(found_records, self.db.update_file_records))
@@ -899,7 +899,7 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
                 all_directory_ids = set()
                 for record in file_records.values():
                     all_directory_ids.add(record.directory_id)
-                all_directory = self.db.query_directory_by_id(list(all_directory_ids))
+                all_directory = self.db.query_repository_by_id(list(all_directory_ids))
             outputs = []
             for size, md5_ids in size2file_ids.items():
                 outputs.append(f'大小: {self.human_readable_size(size)}')
@@ -929,7 +929,7 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
         all_directory_ids = set()
         for record in file_records.values():
             all_directory_ids.add(record.directory_id)
-        all_directory = self.db.query_directory_by_id(list(all_directory_ids))
+        all_directory = self.db.query_repository_by_id(list(all_directory_ids))
 
         def action_a():
             size_list = sorted(size_md5_to_file_records.keys(), reverse=True)
@@ -1017,7 +1017,7 @@ class QuerySizeScript(DataBaseScript):
         :return: 0表示执行正常
         """
         self.check_empty_args(*args)
-        print(self.human_readable_size(self.db.query_director_size(self.get_directory_id_by_name_or_local(name))))
+        print(self.human_readable_size(self.db.query_repository_size(self.get_directory_id_by_name_or_local(name))))
         return 0
 
 
@@ -1031,12 +1031,12 @@ class FindInColumnScript(DataBaseScript, metaclass=ABCMeta):
         :return: 0表示执行正常
         """
         self.check_empty_args(*args)
-        outputs = self.file_record_output_lines(self.db.find_in_file_path(self._col_name(), keyword.strip()))
+        outputs = self.file_record_output_lines(self.db.find_in_file_path(self._item_name(), keyword.strip()))
         self.write_or_output_lines_to_file(outputs, write_path)
         return 0
 
     @abstractmethod
-    def _col_name(self) -> str:
+    def _item_name(self) -> str:
         """
         :return: 需要查询的字段名称
         """
@@ -1047,7 +1047,7 @@ class FindInFileDirectorPathScript(FindInColumnScript):
     在父目录路径里查找
     """
 
-    def _col_name(self) -> str:
+    def _item_name(self) -> str:
         return 'dir_path'
 
 
@@ -1056,7 +1056,7 @@ class FindInNameScript(FindInColumnScript):
     在文件名里查找
     """
 
-    def _col_name(self) -> str:
+    def _item_name(self) -> str:
         return 'name'
 
 
@@ -1065,7 +1065,7 @@ class FindInSuffixScript(FindInColumnScript):
     在后缀名利查找
     """
 
-    def _col_name(self) -> str:
+    def _item_name(self) -> str:
         return 'suffix'
 
 
@@ -1106,7 +1106,7 @@ class QueryDirectoryFileRecordsExistenceScript(FileMD5ComputingScript):
         os.makedirs(abspath(dirname(in_db_path)), exist_ok=True)
         os.makedirs(abspath(dirname(not_in_db_path)), exist_ok=True)
 
-        records = FileRecord.get_dir_file_records(abspath(path))
+        records = FileRecord.get_dir_file_instances(abspath(path))
         if len(records) == 0:
             return
         with open(in_db_path, 'w', encoding='utf8') as in_db_file:

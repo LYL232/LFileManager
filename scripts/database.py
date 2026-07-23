@@ -15,7 +15,7 @@ class InitializeDataBaseScript(DataBaseScript):
 
     def __call__(self, dumped_data_path: str = None, *args) -> int:
         self.check_empty_args(*args)
-        self.db.initialize()
+        self.db.initialize_database()
         if dumped_data_path is None or not exists(dumped_data_path):
             return 0
         print(f'正在从{dumped_data_path}读取备份的数据')
@@ -60,7 +60,7 @@ class InitializeDataBaseScript(DataBaseScript):
             managements = self.db.create_managements_with_id(management_records)
             assert managements == len(management_records), RunTimeError(
                 f'导入管理记录数据时出错，理应导入{len(management_records)}条目录记录，但是只导入了{managements}条')
-            files = self.db.create_files_with_id(file_records)
+            files = self.db.new_files_with_id(file_records)
             assert files == len(file_records), RunTimeError(
                 f'导入文件记录数据时出错，理应导入{len(file_records)}条目录记录，但是只导入了{files}条')
             transaction.commit()
@@ -100,5 +100,5 @@ class ClearDataBaseScript(DataBaseScript):
                 os.makedirs(dir_path, exist_ok=True)
             dump_script(inputs)
             break
-        self.db.clear()
+        self.db.delete_database()
         return 0

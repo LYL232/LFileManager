@@ -1,6 +1,6 @@
 from typing import Dict
-from .database import Database, MysqlDataBase
+from .brute import BruteDatabase, Database
 
 DATABASE_CLASS: Dict[str, type] = {
-    'mysql': MysqlDataBase
+    'brute': BruteDatabase
 }

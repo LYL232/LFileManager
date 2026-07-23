@@ -295,7 +295,7 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
         :return:
         """
         if not self.db.is_initialized():
-            self.db.initialize()
+            self.db.initialize_database()
 
     @property
     def db(self) -> Database:
@@ -334,7 +334,7 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
             except (JSONDecodeError, FileNotFoundError) as e:
                 print(e)
                 raise OperationError(f'请指定查询的目录名字')
-        dir_id = self.db.directory_id(name)
+        dir_id = self.db.repository_id(name)
         assert dir_id is not None, OperationError(f'目录名字{name}不存在于数据库中，无法操作')
         return dir_id
 
@@ -452,7 +452,7 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
         :return: None
         """
         deleted = self.transaction(
-            self.db.delete_file_record_by_ids,
+            self.db.delete_file_records,
             file_ids=[each.file_id for each in records]
         )
         print(f'删除了{deleted}条文件记录')
