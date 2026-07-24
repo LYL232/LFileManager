@@ -1,7 +1,8 @@
 from abc import ABCMeta, abstractmethod
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from base import Repository, RepositoryInstance, FileRecord
+from error import DataError
 
 
 class Transaction(metaclass=ABCMeta):
@@ -21,6 +22,13 @@ class Transaction(metaclass=ABCMeta):
 
 
 class Database(metaclass=ABCMeta):
+    @abstractmethod
+    def begin_transaction(self) -> Transaction:
+        """
+        开始事务
+        :return:
+        """
+
     @abstractmethod
     def initialize_database(self):
         """
@@ -61,7 +69,7 @@ class Database(metaclass=ABCMeta):
     def repositories(self) -> List[Repository]:
         """
         查询所有仓库
-        :return: 仓库名称和描述列表，如果没有返回空
+        :return: 仓库列表，如果没有返回空
         """
 
     @abstractmethod
@@ -124,7 +132,7 @@ class Database(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def repository_instance(
+    def query_repository_instance(
             self,
             repository: Repository,
             instance_name: str
@@ -136,17 +144,25 @@ class Database(metaclass=ABCMeta):
         :return: 仓库实例数据
         """
 
-    @abstractmethod
-    def begin_transaction(self) -> Transaction:
-        """
-        开始事务
-        :return:
-        """
-
-    @abstractmethod
     def new_file_records(self, file_records: List[FileRecord]) -> int:
         """
-        向数据库中插入指定的文件记录
+        创建指定的文件记录
+        :param file_records: 需要插入的文件记录列表
+        :return: 插入的记录数
+        """
+        for record in file_records:
+            assert record.file_record_id is None or DataError(
+                f'将要创建的文件记录：{record}\n不能有指定的文件id'
+            )
+            assert record.directory_file_record_id is not None or DataError(
+                f'将要创建的文件记录：{record}\n必须存在父目录'
+            )
+        return self._write_new_file_records(file_records)
+
+    @abstractmethod
+    def _write_new_file_records(self, file_records: List[FileRecord]) -> int:
+        """
+        向数据库中写入指定的文件记录
         :param file_records: 需要插入的文件记录列表
         :return: 插入的记录数
         """
@@ -200,59 +216,45 @@ class Database(metaclass=ABCMeta):
 
     @abstractmethod
     def query_common_md5_files(self, file_records: List[FileRecord]) -> \
-            Dict[int, Dict[str, List[FileRecord]]]:
+            Dict[str, List[FileRecord]]:
         """
         查询所有拥有相同大小和md5的文件记录id
         :param file_records: 文件记录
-        :return: [size][md5] -> [file_record]
+        :return: [md5] -> [file_record]
         """
 
     @abstractmethod
-    def create_directories_with_id(self, records: List[DirectoryRecord]) -> int:
+    def initialize_repositories(self, repositories: List[Repository]) -> int:
         """
-        创建指定id的目录记录，用于从文件中恢复初始化
-        :param records: 记录列表
+        创建指定的仓库，用于从文件中恢复初始化
+        :param repositories: 记录列表
         :return: 创建的记录个数
         """
 
     @abstractmethod
-    def create_managements_with_id(self, records: List[ManagementRecord]) -> int:
+    def initialize_repository_instances(self, instances: List[RepositoryInstance]) -> int:
         """
-        创建指定id管理记录，用于从文件中恢复初始化
+        创建指定的仓库实例，用于从文件中恢复初始化
+        :param instances: 仓库实例
+        :return: 创建记录的个数
+        """
+
+    @abstractmethod
+    def initialize_file_records(self, records: List[FileRecord]) -> int:
+        """
+        创建指定文件记录，用于从文件中恢复初始化
         :param records: 记录列表
         :return: 创建记录的个数
         """
 
     @abstractmethod
-    def new_files_with_id(self, records: List[FileRecord]) -> int:
+    def initialize_repository_root_fire_record(
+            self, mappings: List[Tuple[Repository, FileRecord]]
+    ) -> int:
         """
-        创建指定id管理记录，用于从文件中恢复初始化
-        :param records: 记录列表
+        创建指定文件记录，用于从文件中恢复初始化
+        :param mappings: 记录列表
         :return: 创建记录的个数
-        """
-
-    @abstractmethod
-    def query_file_by_id(self, file_ids: List[int]) -> Dict[int, FileRecord]:
-        """
-        根据id列表查询指定的文件记录
-        :param file_ids: 需要查询的文件id
-        :return: [file_id] -> FileRecord
-        """
-
-    @abstractmethod
-    def query_repository_by_id(self, repository_ids: List[int]) -> Dict[int, Repository]:
-        """
-        根据id列表查询指定的仓库
-        :param repository_ids: 需要查询的仓库id
-        :return: [repository_id] -> Repository
-        """
-
-    @abstractmethod
-    def query_repository_size(self, repository: Repository) -> int:
-        """
-        查询目录的大小
-        :param repository: 仓库
-        :return: 大小（字节）
         """
 
     @abstractmethod

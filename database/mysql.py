@@ -278,7 +278,7 @@ class MysqlDataBase(Database):
                 return None
             return res[0]
 
-    def new_file_records(self, dir_id: int, file_records: List[FileRecord]) -> int:
+    def _write_new_file_records(self, dir_id: int, file_records: List[FileRecord]) -> int:
         with self.connection.cursor() as cursor:
             return cursor.executemany(
                 """
@@ -453,7 +453,7 @@ class MysqlDataBase(Database):
                 size_md5_to_records[size][md5] = current_ids
             return size_md5_to_records
 
-    def create_directories_with_id(self, records: List[DirectoryRecord]) -> int:
+    def initialize_repositories(self, records: List[DirectoryRecord]) -> int:
         with self.connection.cursor() as cursor:
             return cursor.executemany(
                 """
@@ -466,7 +466,7 @@ class MysqlDataBase(Database):
                 ]
             )
 
-    def create_managements_with_id(self, records: List[ManagementRecord]) -> int:
+    def initialize_repository_instances(self, records: List[ManagementRecord]) -> int:
         with self.connection.cursor() as cursor:
             return cursor.executemany(
                 """

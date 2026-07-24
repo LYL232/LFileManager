@@ -137,7 +137,7 @@ class BruteDatabase(Database):
         assert found is None or DataError(f'未找到{instance.repository.name}仓库的{instance.instance_name}实例')
         return True
 
-    def repository_instance(
+    def query_repository_instance(
             self,
             repository: Repository,
             instance_name: str
@@ -148,10 +148,10 @@ class BruteDatabase(Database):
         assert found is not None or DataError(f'未找到{repository.name}仓库的{instance_name}实例')
         return found
 
-    def new_file_records(self, file_records: List[FileRecord]) -> int:
+    def _write_new_file_records(self, file_records: List[FileRecord]) -> int:
         image = self._current_image
         for each in file_records:
-            assert each.parent.file_record_id in image.file_record.keys() or \
+            assert each.directory_file_record_id.file_record_id in image.file_record.keys() or \
                    DataError(f'找不到{each}的父目录')
 
             self._new_file_record(each)
@@ -160,7 +160,7 @@ class BruteDatabase(Database):
     def _new_file_record(self, record: FileRecord):
         image = self._current_image
         record.file_record_id = image.next_file_record_id
-        record.parent.children[record.name] = record
+        record.directory_file_record_id.children[record.name] = record
         image.file_record[image.next_file_record_id] = image
         image.next_file_record_id += 1
 
@@ -203,7 +203,7 @@ class BruteDatabase(Database):
             -> Dict[int, List[FileRecord]]:
         size_classified = {}
         for record in file_records:
-            if record.parent is None:
+            if record.directory_file_record_id is None:
                 # 没有父目录说明是根目录
                 continue
             size = record.size
@@ -211,27 +211,54 @@ class BruteDatabase(Database):
             if classified is None:
                 size_classified[size] = classified = []
             classified.append(record)
-        res = {}
-        for size, classified in size_classified.items():
-            if len(classified) <= 1:
-                continue
-            res[size] = classified
-        return res
+        return {md5: classified for md5, classified in size_classified.items() if len(classified) > 1}
 
     def query_common_md5_files(self, file_records: List[FileRecord]) -> \
-            Dict[int, Dict[str, List[FileRecord]]]:
-        size_classified = {}
+            Dict[str, List[FileRecord]]:
+        md5_classified = {}
         for record in file_records:
-            if record.parent is None or record.md5 == record.EMPTY_MD5:
+            if record.directory_file_record_id is None or record.md5 == record.EMPTY_MD5:
                 # 没有父目录说明是根目录，没有MD5也跳过
                 continue
 
-            size = record.size
-            classified = size_classified.get(size, None)
+            md5 = record.md5
+            classified = md5_classified.get(md5, None)
             if classified is None:
-                size_classified[size] = classified = []
+                md5_classified[md5] = classified = []
             classified.append(record)
-        return size_classified
+        return {md5: classified for md5, classified in md5_classified.items() if len(classified) > 1}
+
+    def initialize_repositories(self, repositories: List[Repository]) -> int:
+        image = self._current_image
+        assert len(image.repository) == 0 or DataError(
+            f'初始化仓库数据时，仓库数据不为空，目前数据为：{image.repository}'
+        )
+        for repository in repositories:
+            image.repository[repository.name] = repository.clone
+        return len(repositories)
+
+    def initialize_repository_instances(self, instances: List[RepositoryInstance]) -> int:
+        image = self._current_image
+        assert len(image.repository_instance) == 0 or DataError(
+            f'初始化仓库实例数据时，仓库实例数据不为空，目前数据为：{image.repository_instance}'
+        )
+        for instance in instances:
+            image.repository_instance[(instance.repository.name, instance.instance_name)] = instance.clone
+        return len(instances)
+
+    def initialize_file_records(self, records: List[FileRecord]) -> int:
+        image = self._current_image
+        assert len(image.file_record) == 0 or DataError(
+            f'初始化仓库实例数据时，仓库实例数据不为空，目前数据为：{image.repository_instance}'
+        )
+        for record in records:
+            image.file_record[record.file_record_id] = record.copy()
+        return len(records)
+
+    def initialize_repository_root_fire_record(
+            self, mappings: List[Tuple[Repository, FileRecord]]
+    ) -> int:
+        image = self._current_image
 
 
 class BruteTransaction(Transaction):

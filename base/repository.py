@@ -20,6 +20,10 @@ class Repository:
         self.name = name
         self.desc = desc
 
+    @property
+    def clone(self) -> Repository:
+        return Repository(self.name, self.desc)
+
 
 @dataclass(slots=True)
 class RepositoryInstance:
@@ -29,6 +33,10 @@ class RepositoryInstance:
     repository: Repository
     instance_name: str  # 是一个能区分物理存储位置的字符串，比如"第一台笔记本的机械盘"
     path: str = None  # 该仓库实例目前的路径
+
+    @property
+    def clone(self) -> RepositoryInstance:
+        return RepositoryInstance(self.repository.copy(), self.instance_name, self.path)
 
     @classmethod
     def get_file_paths_of_dir(cls, dir_abs_path: str) -> List[str]:

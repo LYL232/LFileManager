@@ -54,13 +54,13 @@ class InitializeDataBaseScript(DataBaseScript):
             return 0
         transaction = self.db.begin_transaction()
         try:
-            directories = self.db.create_directories_with_id(directory_records)
+            directories = self.db.initialize_repositories(directory_records)
             assert directories == len(directory_records), RunTimeError(
                 f'导入目录记录数据时出错，理应导入{len(directory_records)}条目录记录，但是只导入了{directories}条')
-            managements = self.db.create_managements_with_id(management_records)
+            managements = self.db.initialize_repository_instances(management_records)
             assert managements == len(management_records), RunTimeError(
                 f'导入管理记录数据时出错，理应导入{len(management_records)}条目录记录，但是只导入了{managements}条')
-            files = self.db.new_files_with_id(file_records)
+            files = self.db.initialize_file_records(file_records)
             assert files == len(file_records), RunTimeError(
                 f'导入文件记录数据时出错，理应导入{len(file_records)}条目录记录，但是只导入了{files}条')
             transaction.commit()

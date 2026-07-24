@@ -11,7 +11,7 @@ from abc import abstractmethod, ABCMeta
 
 from scripts import DataBaseScript, SingleTransactionScript, FileMD5ComputingScript
 from error import OperationError, RunTimeError, CodingError
-from record import FileRecord
+from base import FileRecord
 
 
 class MakeDirectoryScript(SingleTransactionScript):
@@ -96,12 +96,13 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                     f'是否计算md5并更新至数据库中？'
             ):
                 created_rows = sum(self.file_md5_computing_transactions(
-                    local_records, self.db.new_file_records, dir_id=dir_id))
+                    local_records, self.db._write_new_file_records, dir_id=dir_id))
                 assert created_rows == len(local_records), RunTimeError(
                     f'在往数据库写入数据后，理应写入{len(local_records)}行记录，但只写入了{created_rows}行'
                 )
             else:
-                created_rows = self.transaction(self.db.new_file_records, dir_id=dir_id, file_records=local_records)
+                created_rows = self.transaction(self.db._write_new_file_records, dir_id=dir_id,
+                                                file_records=local_records)
             print(f'更新了{created_rows}条记录')
             return 0
         self._compare_local_records_to_db_records(dir_path, dir_id, local_records, db_records)
@@ -120,11 +121,14 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         fm_dir = self._find_management_dir(dir_path)
         if fm_dir is None:
             # fm_dir不存在
-            assert name is not None, OperationError(f'目录名字缺失，而且目标路径{dir_path}不存在.lyl232fm文件夹，无法操作')
-            assert tag is not None, OperationError(f'目录管理标识缺失，而且目标路径{dir_path}不存在.lyl232fm文件夹，无法操作')
+            assert name is not None, OperationError(
+                f'目录名字缺失，而且目标路径{dir_path}不存在.lyl232fm文件夹，无法操作')
+            assert tag is not None, OperationError(
+                f'目录管理标识缺失，而且目标路径{dir_path}不存在.lyl232fm文件夹，无法操作')
 
             dir_id = self.db.repository_id(name)
-            assert dir_id is not None, OperationError(f'管理目录名字{name}并未被注册，无法关联，请使用mkdir脚本创建新的管理目录')
+            assert dir_id is not None, OperationError(
+                f'管理目录名字{name}并未被注册，无法关联，请使用mkdir脚本创建新的管理目录')
             assert not self.db.is_repository_instance_exists(tag), OperationError(f'标识：{tag}已经存在，无法关联')
             self._write_manage_info(dir_path, name, tag)
             self.transaction(self._create_or_update_management, dir_id=dir_id, tag=tag, dir_path=dir_path)
@@ -147,7 +151,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             name, tag = name or info['name'], tag or info['tag']
             dir_id = self.db.repository_id(name)
             self.transaction(self._create_or_update_management, dir_id=dir_id, tag=tag, dir_path=dir_path)
-            assert dir_id is not None, OperationError(f'管理目录名字{name}并未被注册，无法关联，请使用mkdir脚本创建新的管理目录')
+            assert dir_id is not None, OperationError(
+                f'管理目录名字{name}并未被注册，无法关联，请使用mkdir脚本创建新的管理目录')
         return dir_id, dir_path
 
     def _compare_local_records_to_db_records(
@@ -207,10 +212,10 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                     f'是否在输入数据库前计算md5值？'
             ):
                 created = sum(self.file_md5_computing_transactions(
-                    file_records, self.db.new_file_records, dir_id=dir_id,
+                    file_records, self.db._write_new_file_records, dir_id=dir_id,
                 ))
             else:
-                created = self.transaction(self.db.new_file_records, dir_id=dir_id, file_records=file_records)
+                created = self.transaction(self.db._write_new_file_records, dir_id=dir_id, file_records=file_records)
             assert created == len(file_records), \
                 RunTimeError(f'理应插入{len(file_records)}条数据库文件记录，但只插入了{created}条')
             print(f'插入了{created}条文件记录')
@@ -238,7 +243,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                     continue
                 removing_path.append(real_path)
                 print(real_path)
-            if self.input_query('上述文件将被批量删除，请确认是否删除？') and self.input_query('上述操作无法被恢复，请确认：'):
+            if self.input_query('上述文件将被批量删除，请确认是否删除？') and self.input_query(
+                    '上述操作无法被恢复，请确认：'):
                 for path in removing_path:
                     if not exists(path):
                         continue
@@ -283,10 +289,10 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                     f'是否在输入数据库前计算md5值？'
             ):
                 created = sum(self.file_md5_computing_transactions(
-                    [record], self.db.new_file_records, dir_id=dir_id,
+                    [record], self.db._write_new_file_records, dir_id=dir_id,
                 ))
             else:
-                created = self.transaction(self.db.new_file_records, dir_id=dir_id, file_records=[record])
+                created = self.transaction(self.db._write_new_file_records, dir_id=dir_id, file_records=[record])
             assert created == 1, RunTimeError(f'理应插入1条数据库文件记录，但插入了{created}条')
             print(f'插入了{created}条文件记录')
             return True
@@ -331,7 +337,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         def action_a():
             sorted_paths = sorted(list(unique_paths))
             records = [db_records[path] for path in sorted_paths]
-            assert all(each.file_id is not None for each in records), CodingError('数据库中的文件记录中的文件id不应该为None')
+            assert all(each.file_id is not None for each in records), CodingError(
+                '数据库中的文件记录中的文件id不应该为None')
             no_md5_records, md5_records = [], []
             for each in records:
                 if each.md5 == FileRecord.EMPTY_MD5:
@@ -611,7 +618,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                     continue
                 removing_records.append((local_record, real_path))
                 print(real_path)
-            if self.input_query('上述文件将被批量删除，请确认是否删除？') and self.input_query('上述操作无法被恢复，请确认：'):
+            if self.input_query('上述文件将被批量删除，请确认是否删除？') and self.input_query(
+                    '上述操作无法被恢复，请确认：'):
                 for record, real_path in removing_records:
                     if not exists(real_path):
                         continue
@@ -750,7 +758,8 @@ class ManageDirectoryScript(FileMD5ComputingScript):
             # 存在记录则更新
             self.db.update_management(tag=tag, path=dir_path)
             return
-        assert self.db.new_repository_instance(dir_id=dir_id, tag=tag, path=dir_path) == 1, RunTimeError('创建管理信息失败！')
+        assert self.db.new_repository_instance(dir_id=dir_id, tag=tag, path=dir_path) == 1, RunTimeError(
+            '创建管理信息失败！')
 
 
 class CancelManagementScript(SingleTransactionScript):
@@ -915,33 +924,38 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
             {'ls': ('[写入文件路径（可选）]', '列出这些文件的目录路径和大小 [写入指定的文件中]', action_ls)}
         )
 
+    @staticmethod
+    def _size_md5_classified(md5_to_file_records: Dict[str, List[FileRecord]]) \
+            -> Dict[int, Dict[str, List[FileRecord]]]:
+        size_md5_to_file_records = {}
+        for md5, records in md5_to_file_records.items():
+            for record in records:
+                size = record.size
+                size_classified = size_md5_to_file_records.get(size, None)
+                if size_classified is None:
+                    size_md5_to_file_records[size] = size_classified = {}
+                size_md5_classified = size_classified.get(md5, None)
+                if size_md5_classified is None:
+                    size_classified[md5] = size_md5_classified = []
+                size_md5_classified.append(record)
+        return size_md5_to_file_records
+
     def _process_common_size_md5_file_ids(
             self,
-            size_md5_to_file_records: Dict[int, Dict[str, List[int]]]
+            md5_to_file_records: Dict[str, List[FileRecord]]
     ):
-        if len(size_md5_to_file_records) == 0:
+        if len(md5_to_file_records) == 0:
             return
-        all_file_ids = []
-        for md52ids in size_md5_to_file_records.values():
-            for ids in md52ids.values():
-                all_file_ids.extend(ids)
-        file_records = self.db.query_file_by_id(all_file_ids)
-        all_directory_ids = set()
-        for record in file_records.values():
-            all_directory_ids.add(record.directory_id)
-        all_directory = self.db.query_repository_by_id(list(all_directory_ids))
+
+        size_md5_to_file_records = self._size_md5_classified(md5_to_file_records)
 
         def action_a():
             size_list = sorted(size_md5_to_file_records.keys(), reverse=True)
             for size in size_list:
                 md5_dict = size_md5_to_file_records[size]
-                for md5, _ids in md5_dict.items():
+                for md5, records in md5_dict.items():
                     print(f'大小: {self.human_readable_size(size)}，md5：{md5}')
-                    options = []
-                    for file_id in _ids:
-                        _record = file_records[file_id]
-                        options.append((
-                            file_id, f'{all_directory[_record.directory_id].name}:{file_records[file_id].path}'))
+                    options = [(record, f'{record.repository.name}:{record.path}') for record in records]
                     options.sort(key=lambda x: x[1])
                     print('=' * 120)
                     for i, (_, hint) in enumerate(options):
@@ -957,31 +971,30 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
                             if keep == 'abort':
                                 return True
                             elif keep == 'skip' or keep == 's':
-                                keep_ids = set(list(range(len(_ids))))
+                                keep_ids = set(list(range(len(records))))
                                 break
                             elif keep == '-1':
                                 break
                             for each in keep.split(' '):
                                 each = int(each)
-                                assert 0 <= each < len(_ids)
+                                assert 0 <= each < len(records)
                                 keep_ids.add(each)
                             break
                         except ValueError:
                             print(f'无法识别输入：{keep}，请重新输入')
                         except AssertionError:
-                            print(f'请输入0至{len(_ids) - 1}的整数')
-                    if len(keep_ids) == len(_ids):
+                            print(f'请输入0至{len(records) - 1}的整数')
+                    if len(keep_ids) == len(records):
                         continue
                     to_delete = []
 
                     print('=' * 120)
-                    for i, (file_id, _) in enumerate(options):
-                        _record = file_records[file_id]
+                    for i, (record, _) in enumerate(options):
                         if i not in keep_ids:
-                            to_delete.append(_record)
+                            to_delete.append(record)
                         print(
-                            f'【{i}】{all_directory[_record.directory_id].name}:'
-                            f'{file_records[file_id].path}',
+                            f'【{i}】{record.repository.name}:'
+                            f'{record.path}',
                             '将被保留' if i in keep_ids else '将被删除'
                         )
                     print('=' * 120)
@@ -993,11 +1006,10 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
         def action_ls(inputs):
             outputs = []
             for size, md5_dict in size_md5_to_file_records.items():
-                for md5, _ids in md5_dict.items():
+                for md5, records in md5_dict.items():
                     outputs.append(f'大小: {self.human_readable_size(size)}，md5：{md5}')
-                    for file_id in _ids:
-                        _record = file_records[file_id]
-                        outputs.append(f'{all_directory[_record.directory_id].name}:{file_records[file_id].path}')
+                    for record in records:
+                        outputs.append(f'{record.repository.name}:{record.path}')
             self.cmd_ls(inputs, outputs)
             return False
 

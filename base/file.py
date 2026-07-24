@@ -10,6 +10,8 @@ from base import Repository, RepositoryInstance
 
 
 class FileRecord:
+    __INSTANCE: Dict[int, FileRecord] = {}
+
     """
     描述一个文件的类
     """
@@ -22,7 +24,7 @@ class FileRecord:
             suffix: str,
             size: int,
             modified_time: float,
-            parent: FileRecord = None,
+            directory_file_record_id: int = None,
             md5: str = None,
             file_record_id: int = None,
             # path: str = None,
@@ -43,13 +45,26 @@ class FileRecord:
 
         self.file_record_id = file_record_id
         self.repository = repository
-        self.parent = parent
+        self.directory_file_record_id = directory_file_record_id
         self.children: Dict[str, FileRecord] = {}
         self.name, self.suffix = name, suffix
 
         self.size = size
         self.modified_time = modified_time
         self.md5 = md5 or self.EMPTY_MD5
+
+    @property
+    def clone(self) -> FileRecord:
+        return FileRecord(
+            repository=self.repository,
+            name=self.name,
+            suffix=self.suffix,
+            size=self.size,
+            modified_time=self.modified_time,
+            directory_file_record_id=self.directory_file_record_id,
+            md5=self.md5,
+            file_record_id=self.file_record_id,
+        )
 
     def __str__(self):
         return str(self.json_obj)
@@ -74,11 +89,11 @@ class FileRecord:
     @property
     def path(self) -> str:
         res = []
-        parent = self.parent
+        parent = self.directory_file_record_id
         while parent is not None:
             res.append(parent)
-            parent = parent.parent
-
+            parent = parent.directory
+        res.reverse()
         return f'{"/".join([each.full_name for each in res])}/{self.full_name}'
 
     @property
@@ -113,7 +128,7 @@ class FileRecord:
 
     @property
     def identity(self):
-        return self.repository.name, self.parent.file_record_id, self.name
+        return self.repository.name, self.directory_file_record_id.file_record_id, self.name
 
     def __hash__(self):
         return hash(self.identity)
