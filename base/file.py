@@ -1,12 +1,11 @@
 from __future__ import annotations
 import os
-import hashlib
-from os.path import join
+# import hashlib
+# from os.path import join
 import platform
 import time
 from typing import Dict
-
-from base import Repository, RepositoryInstance
+# from base import RepositoryInstance
 
 
 class FileRecord:
@@ -19,19 +18,14 @@ class FileRecord:
 
     def __init__(
             self,
-            repository: Repository,
+            repository_name: str,
             name: str,
             suffix: str,
             size: int,
             modified_time: float,
             directory_file_record_id: int = None,
             md5: str = None,
-            file_record_id: int = None,
-            # path: str = None,
-            # dir_path: str = None,
-
-            # directory_id: int = None,
-            # dir_physical_path: str = None
+            file_record_id: int = None
     ):
         """
         :param size: 该文件的大小，单位为字节
@@ -44,9 +38,10 @@ class FileRecord:
         assert isinstance(modified_time, int)
 
         self.file_record_id = file_record_id
-        self.repository = repository
+
+        self.repository_name = repository_name
         self.directory_file_record_id = directory_file_record_id
-        self.children: Dict[str, FileRecord] = {}
+        self.children_id: Dict[str, int] = {}
         self.name, self.suffix = name, suffix
 
         self.size = size
@@ -54,9 +49,9 @@ class FileRecord:
         self.md5 = md5 or self.EMPTY_MD5
 
     @property
-    def clone(self) -> FileRecord:
+    def copy(self) -> FileRecord:
         return FileRecord(
-            repository=self.repository,
+            repository_name=self.repository_name,
             name=self.name,
             suffix=self.suffix,
             size=self.size,
@@ -73,7 +68,7 @@ class FileRecord:
     def json_obj(self) -> dict:
         return {
             'file_record_id': self.file_record_id,
-            'path': self.path,
+            'directory_file_record_id': self.directory_file_record_id,
             'name': self.name,
             'size': self.size,
             'suffix': self.suffix,
@@ -85,16 +80,6 @@ class FileRecord:
     @property
     def full_name(self) -> str:
         return f'{self.name}{self.suffix}'
-
-    @property
-    def path(self) -> str:
-        res = []
-        parent = self.directory_file_record_id
-        while parent is not None:
-            res.append(parent)
-            parent = parent.directory
-        res.reverse()
-        return f'{"/".join([each.full_name for each in res])}/{self.full_name}'
 
     @property
     def modified_date(self) -> str:
@@ -128,7 +113,7 @@ class FileRecord:
 
     @property
     def identity(self):
-        return self.repository.name, self.directory_file_record_id.file_record_id, self.name
+        return self.repository_name, self.directory_file_record_id, self.name
 
     def __hash__(self):
         return hash(self.identity)
@@ -139,34 +124,34 @@ class FileRecord:
         return self.identity == other.identity
 
 
-class FileInstance:
-    # 128MB的读取缓存
-    READ_BUFFER = 128 * 1024 * 1024
-
-    def __init__(
-            self,
-            repository_instance: RepositoryInstance,
-            file_record: FileRecord,
-            md5: str = None
-    ):
-        self.repository_instance = repository_instance
-        self.file_record = file_record
-        self.md5 = md5 or FileRecord.EMPTY_MD5
-
-    def compute_md5(self) -> str:
-        """
-        计算文件的md5
-        :return: md5
-        """
-        m = hashlib.md5()
-        with open(join(
-                self.repository_instance.path,
-                *(self.file_record.path.split('/')[1:])), 'rb'
-        ) as file:
-            while True:
-                data = file.read(self.READ_BUFFER)
-                if not data:
-                    break
-                m.update(data)
-        self.md5 = m.hexdigest()
-        return self.md5
+# class FileInstance:
+#     # 128MB的读取缓存
+#     READ_BUFFER = 128 * 1024 * 1024
+#
+#     def __init__(
+#             self,
+#             repository_instance: RepositoryInstance,
+#             file_record: FileRecord,
+#             md5: str = None
+#     ):
+#         self.repository_instance = repository_instance
+#         self.file_record = file_record
+#         self.md5 = md5 or FileRecord.EMPTY_MD5
+#
+#     def compute_md5(self) -> str:
+#         """
+#         计算文件的md5
+#         :return: md5
+#         """
+#         m = hashlib.md5()
+#         with open(join(
+#                 self.repository_instance.path,
+#                 *(self.file_record.path.split('/')[1:])), 'rb'
+#         ) as file:
+#             while True:
+#                 data = file.read(self.READ_BUFFER)
+#                 if not data:
+#                     break
+#                 m.update(data)
+#         self.md5 = m.hexdigest()
+#         return self.md5

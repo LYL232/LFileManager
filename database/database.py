@@ -239,6 +239,13 @@ class Database(metaclass=ABCMeta):
         :return: 创建记录的个数
         """
 
+    def file_record_path(self, record: FileRecord) -> str:
+        """
+        获取文件记录的仓库内相对路径
+        :param record: 文件记录
+        :return: 仓库内路径
+        """
+
     @abstractmethod
     def initialize_file_records(self, records: List[FileRecord]) -> int:
         """
@@ -248,9 +255,7 @@ class Database(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def initialize_repository_root_fire_record(
-            self, mappings: List[Tuple[Repository, FileRecord]]
-    ) -> int:
+    def initialize_repository_root_fire_record(self, mappings: List[Tuple[str, int]]) -> int:
         """
         创建指定文件记录，用于从文件中恢复初始化
         :param mappings: 记录列表
@@ -258,19 +263,28 @@ class Database(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def find_in_file_path(self, item: str, keyword: str) -> List[FileRecord]:
+    def find_in_file_path(
+            self,
+            file_record_property: str,
+            keyword: str,
+            repository_name: str = None
+    ) -> List[FileRecord]:
         """
         在文件记录的指定字段中寻找指定关键字
-        :param item: 字段
+        :param file_record_property: 文件记录的字段
         :param keyword: 关键字
+        :param repository_name: 仓库名字，如果为空则不限制
         :return: 查询到的文件记录
         """
 
     @abstractmethod
-    def query_file_ids_by_size_and_md5(self, size: int, md5: str) -> List[int]:
+    def query_file_record_ids_by_size_and_md5(
+            self, size: int, md5: str, repository_name: str = None
+    ) -> List[int]:
         """
         根据指定的md5值查询所有的文件记录id
         :param size: 指定的大小
         :param md5: 指定的md5值
+        :param repository_name: 仓库名字
         :return: 文件记录的id列表
         """

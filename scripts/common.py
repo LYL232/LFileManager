@@ -1144,7 +1144,7 @@ class QueryDirectoryFileRecordsExistenceScript(FileMD5ComputingScript):
             else:
                 md5 = record.compute_md5()
                 md5cache_file.write(f'{path}\\{md5}\n')
-            res = self.db.query_file_ids_by_size_and_md5(record.size, md5)
+            res = self.db.query_file_record_ids_by_size_and_md5(record.size, md5)
             if len(res) > 0:
                 in_db_file.write(f'{path}\n')
             else:

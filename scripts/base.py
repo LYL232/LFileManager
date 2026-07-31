@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from database import DATABASE_CLASS, Database
 from error import ArgumentError, CodingError, RunTimeError, OperationError
-from record import FileRecord
+from base import FileRecord
 
 
 class BaseScript(metaclass=ABCMeta):
@@ -425,7 +425,7 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
         for record in records:
             assert record.md5 != FileRecord.EMPTY_MD5 and record.file_id is not None, \
                 CodingError('检查文件记录是否可以安全删除时需要保证该文件记录的md5值和文件id是有效的')
-            same_ids = set(self.db.query_file_ids_by_size_and_md5(size=record.size, md5=record.md5))
+            same_ids = set(self.db.query_file_record_ids_by_size_and_md5(size=record.size, md5=record.md5))
             file_id = record.file_id
             assert file_id in same_ids, RunTimeError(f'文件记录与数据库不一致：{record}对应的数据库文件记录不存在')
             for each in to_delete:

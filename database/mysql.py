@@ -597,7 +597,7 @@ class MysqlDataBase(Database):
                 ))
             return file_records
 
-    def query_file_ids_by_size_and_md5(self, size: int, md5: str) -> List[int]:
+    def query_file_record_ids_by_size_and_md5(self, size: int, md5: str) -> List[int]:
         with self.connection.cursor() as cursor:
             cursor.execute(
                 """
