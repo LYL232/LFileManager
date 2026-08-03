@@ -9,7 +9,6 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('script', type=str, choices=list(SCRIPTS.keys()), help='需要运行的脚本')
     parser.add_argument('script_args', type=str, nargs='*')
-    parser.add_argument('--database_config', type=str, default='database_config.json', help='数据库配置')
     return parser.parse_args()
 
 

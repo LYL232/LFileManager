@@ -57,12 +57,20 @@ class Database(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def new_repository(self, name: str, desc: str):
+    def new_repository(self, name: str, desc: str) -> bool:
         """
         创建一个新的需要管理的仓库
         :param name: 仓库名，不能重复
         :param desc: 描述
-        :return: None
+        :return: 是否创建成功
+        """
+
+    @abstractmethod
+    def is_repository_exists(self, name: str) -> bool:
+        """
+        查询仓库是否存在
+        :param name: 仓库名
+        :return: 是否存在仓库
         """
 
     @abstractmethod

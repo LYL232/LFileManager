@@ -4,7 +4,7 @@
 import os
 from os.path import join, exists, abspath, dirname
 from scripts import DataBaseScript
-from record import DirectoryRecord, ManagementRecord, FileRecord
+from base import FileRecord, Repository, RepositoryInstance
 from error import RunTimeError
 
 

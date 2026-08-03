@@ -20,16 +20,9 @@
 
 ## 程序安装
 
-- Docker 或 mysql
-- Python 3.9
+- Python 3
 
 ### 安装Python 依赖库
-
-推荐使用conda创建专用Python环境:
-
-```bash
-conda create -n lyl232fm python=3.9
-```
 
 1. 安装Python安装包：在本项目根目录下：
 
@@ -38,72 +31,6 @@ conda create -n lyl232fm python=3.9
    ```
 
 ### 初始化
-
-#### 使用Docker建立数据库（或者有其他部署mysql的方式可忽略此步骤）
-
-参考链接：https://www.cnblogs.com/sablier/p/11605606.html
-
-1. 拉取数据库镜像
-
-   ```bash
-   docker pull mysql:8.0
-   ```
-
-2. 建立MySQL的新容器：(端口号和密码可自行选择)
-
-   ```bash
-   docker run -p 3306:3306 --name lyl232fm_mysql -e MYSQL_ROOT_PASSWORD=123456 -d mysql:8.0
-   ```
-
-   可以建立目录映射：(宿主机目录和密码123456可以自定义)
-
-   ```bash
-   docker run -p 3306:3306 --name lyl232fm_mysql \
-   -v 宿主机目录/etc/mysql:/etc/mysql \
-   -v 宿主机目录/var/lib/mysql:/var/lib/mysql \
-   -v 宿主机目录/var/lib/mysql-files:/var/lib/mysql-files \
-   -e MYSQL_ROOT_PASSWORD=123456 \
-   -d mysql:8.0
-   ```
-
-3. 稍等一会，从终端连入容器，并建立数据库
-
-   ```bash
-   docker exec -it lyl232fm_mysql bash
-   ```
-
-   在容器的终端登录mysql：
-
-   ```bash
-   mysql -uroot -p123456
-   ```
-
-   如果出现如下错误：
-
-   ```
-   ERROR 2002 (HY000): Can't connect to local MySQL server through socket '/var/run/mysqld/mysqld.sock' (2)
-   ```
-
-   则说明容器还没启动完毕，请稍后重试。
-
-   在mysql终端建立名为lyl232fm的数据库：
-
-   ```sql
-   CREATE DATABASE lyl232fm CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-   ```
-
- 4. 将db_config.json调整为自己配置的内容：
-
-    ```json
-    {
-      "mysql": {
-        "host": "localhost",
-        "user": "root",
-        "password": "123456",
-        "port": 3306
-      }
-    }
-    ```
 
 #### 将项目根目录加入系统路径(可选)
 
@@ -117,11 +44,11 @@ conda create -n lyl232fm python=3.9
 
 文件记录对应着一个文件在目录里的状态数据，包括相对路径、MD5值等。
 
-### 目录记录和管理记录
+### 仓库记录和仓库实例记录
 
-本程序假设所管理的文件夹有多份副本，所以本程序的目录其实是若干个文件记录的集合。而管理记录则是记录了一个目录的其中一个物理位置。
+本程序假设所管理的仓库有多份副本，仓库其实是若干个文件记录的集合。而仓库实例则是记录了一个目录的其中一个物理位置。
 
-本程序就是利用数据库工具管理这些记录，通过比较本地的文件和数据库中的文件记录，来达到同步、备份、去重庞大复杂文件夹的目的。
+本程序就是利用数据库等工具管理这些记录，通过比较本地的文件和数据库中的文件记录，来达到同步、备份、去重庞大复杂文件夹的目的。
 
 ## 初始化数据库（如果执行其他需要数据库的命令会自动执行）
 
@@ -131,18 +58,18 @@ lfm init_db [路径(可选)]
 
 也可以指定可选参数，一个指向导出数据的文件夹路径，导出数据的操作可见下文中的"导出数据"。
 
-## 新建一个目录记录
+## 新建一个仓库
 
 ```bash
-lfm mkdir 目录记录名称 目录描述
+lfm mkrepo 仓库名称 仓库描述
 ```
 
-其中"目录记录名称"和"目录描述"都是必须的。注意"目录记录名称"不能重复。
+其中"记录名称"和"目录描述"都是必须的。注意"目录记录名称"不能重复。
 
-## 新建一个管理记录
+## 新建一个仓库实例
 
 ```bash
-lfm manage 路径 目录记录名称 管理标记
+lfm repoins 仓库 仓库实例记录名称
 ```
 
 这将新建一个对“目录记录名称”目录的管理记录。注意"管理标记"不能重复，它应该对应唯一一个物理文件夹，即"路径"所对应的文件夹。

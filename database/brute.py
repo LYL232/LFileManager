@@ -31,6 +31,16 @@ class BruteDatabaseImage:
     # 下一个文件记录ID
     next_file_record_id: int = 0
 
+    @property
+    def copy(self) -> BruteDatabaseImage:
+        return BruteDatabaseImage(
+            repository={key: value.copy for key, value in self.repository.items()},
+            repository_instance={key: [each.copy for each in value] for key, value in self.repository_instance.items()},
+            repository_root=self.repository_root.copy(),
+            file_record={key: value.copy for key, value in self.file_record.items()},
+            next_file_record_id=self.next_file_record_id
+        )
+
 
 class BruteDatabase(Database):
     def __init__(self, database_path: str = None, logger: callable = print):
@@ -85,6 +95,9 @@ class BruteDatabase(Database):
         )
         self._current_image.repository_root[name] = root_record
         self._current_image.file_record[self._current_image.next_file_record_id] = root_record
+
+    def is_repository_exists(self, name: str) -> bool:
+        return name in self._current_image.repository.keys()
 
     def repository_instances(self, repository: Repository) -> List[RepositoryInstance]:
         return self._current_image.repository_instance[repository.name].copy()
@@ -233,7 +246,7 @@ class BruteDatabase(Database):
             f'初始化仓库数据时，仓库数据不为空，目前数据为：{image.repository}'
         )
         for repository in repositories:
-            image.repository[repository.name] = repository.clone
+            image.repository[repository.name] = repository.copy
         return len(repositories)
 
     def initialize_repository_instances(self, instances: List[RepositoryInstance]) -> int:
@@ -242,7 +255,7 @@ class BruteDatabase(Database):
             f'初始化仓库实例数据时，仓库实例数据不为空，目前数据为：{image.repository_instance}'
         )
         for instance in instances:
-            image.repository_instance[(instance.repository.name, instance.instance_name)] = instance.clone
+            image.repository_instance[(instance.repository.name, instance.instance_name)] = instance.copy
         return len(instances)
 
     def initialize_file_records(self, records: List[FileRecord]) -> int:
@@ -337,6 +350,7 @@ class BruteDatabase(Database):
 class BruteTransaction(Transaction):
     def __init__(self, database: BruteDatabase):
         self.database = database
+        self.initial_image = database._current_image
 
     def commit(self):
         pass

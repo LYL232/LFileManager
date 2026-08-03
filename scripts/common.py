@@ -21,17 +21,17 @@ class MakeDirectoryScript(SingleTransactionScript):
 
     def transaction_action(self, name: str, desc: str) -> int:
         """
-        创建一个新目录脚本
-        :param name: 目录名字
-        :param desc: 目录描述
+        创建一个新仓库脚本
+        :param name: 仓库名字
+        :param desc: 仓库描述
         :return: 0表示正常
         """
-        assert not self.db.repository_id(name) is not None, OperationError(f'目录名字：{name}已经被创建')
-        self.db.new_repository(name, desc)
+        assert not self.db.is_repository_exists(name) or OperationError(f'仓库名字：{name}已经被创建')
+        assert self.db.new_repository(name, desc) or RunTimeError(f'创建仓库: {name}失败')
         return 0
 
 
-class RemoveDirectoryScript(SingleTransactionScript):
+class RemoveRepositoryScript(SingleTransactionScript):
     def before_transaction(self, name: str, *args):
         self.check_empty_args(*args)
         assert 0 < len(name) <= 255, OperationError('名字不能为空，且长度不能超过255')
@@ -42,7 +42,7 @@ class RemoveDirectoryScript(SingleTransactionScript):
         :param name: 目录名字
         :return: 0表示正常
         """
-        assert self.db.remove_directory(name) == 1, OperationError(f'目录名字：{name}不存在或者不为空，无法删除')
+        assert self.db.delete_repository(name), OperationError(f'目录名字：{name}不存在或者不为空，无法删除')
         return 0
 
 
