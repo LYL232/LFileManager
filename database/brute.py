@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from time import time
 
 from .database import Database, Transaction
-from error import OperationError, DataError
+from error import OperationError, DataError, RunTimeError
 import os
 from os.path import exists, join, abspath
 
@@ -58,13 +58,14 @@ class BruteDatabase(Database):
         self.data_base_root_path = data_base_root_path
         self.main_database_path = join(data_base_root_path, 'main')
         self.backup_database_path = join(data_base_root_path, 'backup')
+        self.temp_backup_database_path = join(data_base_root_path, 'temp_backup')
         self.logger = logger
 
         self._current_image = self._load_image_from_file(self.main_database_path) \
             if exists(self.main_database_path) else BruteDatabaseImage()
 
     @staticmethod
-    def _get_data_base_file_paths(directory_path:str) -> Tuple[str, str, str, str]:
+    def _get_data_base_file_paths(directory_path: str) -> Tuple[str, str, str, str]:
         return (
             join(directory_path, 'repositories.csv'),
             join(directory_path, 'repository_root.csv'),
@@ -94,20 +95,20 @@ class BruteDatabase(Database):
             while line:
                 name, root_file_id = line.strip().split(',')
                 repository_root[name] = int(root_file_id)
-        with open(repository_instance_file_path, 'r', encoding='utf-8') as file:
-            line = file.readline()
-            while line:
-                items = line.strip().split('/')
-                repository_name, instance_name = items[:2]
-                path = '/'.join(items[2:])
-                repository_instances = repository_instance.get(repository_name, None)
-                if repository_instances is None:
-                    repository_instance[repository_name] = repository_instances = {}
-                repository_instances[instance_name] = RepositoryInstance(
-                    repository_name=repository_name,
-                    instance_name=instance_name,
-                    path=path
-                )
+        # with open(repository_instance_file_path, 'r', encoding='utf-8') as file:
+        #     line = file.readline()
+        #     while line:
+        #         items = line.strip().split('/')
+        #         repository_name, instance_name = items[:2]
+        #         path = '/'.join(items[2:])
+        #         repository_instances = repository_instance.get(repository_name, None)
+        #         if repository_instances is None:
+        #             repository_instance[repository_name] = repository_instances = {}
+        #         repository_instances[instance_name] = RepositoryInstance(
+        #             repository_name=repository_name,
+        #             instance_name=instance_name,
+        #             path=path
+        #         )
         with open(file_record_path, 'r', encoding='utf-8') as file:
             line = file.readline()
             while line:
@@ -129,11 +130,19 @@ class BruteDatabase(Database):
         )
 
     def save_current_image_to_database(self):
-        if exists(self.backup_database_path):
-            shutil.rmtree(self.backup_database_path)
-        os.makedirs(self.backup_database_path)
+        # 先移动已经备份好的到一个临时的位置
+        if not exists(self.main_database_path):
+            os.makedirs(self.main_database_path, exist_ok=False)
 
-        (
+        # 如果要移动的临时位置已经有了，那直接删除
+        if exists(self.temp_backup_database_path):
+            shutil.rmtree(self.temp_backup_database_path)
+
+        if exists(self.backup_database_path):
+            shutil.move(self.backup_database_path, self.temp_backup_database_path)
+        os.makedirs(self.backup_database_path, exist_ok=False)
+
+        main_files = (
             main_repository_file_path,
             main_repository_root_file_path,
             main_repository_instance_file_path,
@@ -147,53 +156,70 @@ class BruteDatabase(Database):
             backup_file_record_path
         ) = self._get_data_base_file_paths(self.backup_database_path)
 
-        shutil.copy2(main_repository_file_path, backup)
+        try:
+            shutil.copy2(main_repository_file_path, backup_repository_file_path)
+            shutil.copy2(main_repository_root_file_path, backup_repository_root_file_path)
+            shutil.copy2(main_repository_instance_file_path, backup_repository_instance_file_path)
+            shutil.copy2(main_file_record_path, backup_file_record_path)
+        except Exception as e:
+            # 回退之前的动作
+            try:
+                shutil.rmtree(self.backup_database_path)
+                if exists(self.temp_backup_database_path):
+                    shutil.move(self.backup_database_path, self.temp_backup_database_path)
+            except Exception as internal_e:
+                RunTimeError(f'无法备份主数据库并且无法回退已经执行的备份操作，异常：{internal_e}，复制主数据库时异常：{e}')
+            RunTimeError(f'无法备份主数据库，异常：{e}')
 
         image = self._current_image
-        repository = image.repository
-        repository_root = image.repository_root
         repository_instance = image.repository_instance
         file_record = image.file_record
 
-        with open(self.repository_file_path, 'r', encoding='utf-8') as file:
-            line = file.readline()
-            while line:
-                name, desc = line.strip().split(',')
-                repository[name] = Repository(name, desc)
-        with open(self.repository_root_file_path, 'r', encoding='utf-8') as file:
-            line = file.readline()
-            while line:
-                name, root_file_id = line.strip().split(',')
-                repository_root[name] = int(root_file_id)
-        with open(self.repository_instance_file_path, 'r', encoding='utf-8') as file:
-            line = file.readline()
-            while line:
-                items = line.strip().split('/')
-                repository_name, instance_name = items[:2]
-                path = '/'.join(items[2:])
-                repository_instances = repository_instance.get(repository_name, None)
-                if repository_instances is None:
-                    repository_instance[repository_name] = repository_instances = {}
-                repository_instances[instance_name] = RepositoryInstance(
-                    repository_name=repository_name,
-                    instance_name=instance_name,
-                    path=path
-                )
-        with open(self.repository_instance_file_path, 'r', encoding='utf-8') as file:
-            line = file.readline()
-            while line:
-                file_record_obj = json.loads(line)
-                file_record_id = file_record_obj['file_record_id']
-                file_record[file_record_id] = FileRecord(
-                    repository_name=file_record_obj['repository_name'],
-                    name=file_record['name'],
-                    suffix=file_record['suffix'],
-                    size=file_record['size'],
-                    modified_time=file_record['modified_time'],
-                    directory_file_record_id=file_record['directory_file_record_id'],
-                    md5=file_record['md5'],
-                    file_record_id=file_record_id
-                )
+        try:
+            with open(main_repository_file_path, 'w', encoding='utf-8') as file:
+                for name, repository in image.repository.items():
+                    file.write(f'{name},{repository.desc}\n')
+            with open(main_repository_root_file_path, 'r', encoding='utf-8') as file:
+                for name, root_file_id in image.repository_root.items():
+                    file.write(f'{name},{root_file_id}\n')
+            with open(main_repository_instance_file_path, 'r', encoding='utf-8') as file:
+                line = file.readline()
+                while line:
+                    items = line.strip().split('/')
+                    repository_name, instance_name = items[:2]
+                    path = '/'.join(items[2:])
+                    repository_instances = repository_instance.get(repository_name, None)
+                    if repository_instances is None:
+                        repository_instance[repository_name] = repository_instances = {}
+                    repository_instances[instance_name] = RepositoryInstance(
+                        repository_name=repository_name,
+                        instance_name=instance_name,
+                        path=path
+                    )
+            with open(self.repository_instance_file_path, 'r', encoding='utf-8') as file:
+                line = file.readline()
+                while line:
+                    file_record_obj = json.loads(line)
+                    file_record_id = file_record_obj['file_record_id']
+                    file_record[file_record_id] = FileRecord(
+                        repository_name=file_record_obj['repository_name'],
+                        name=file_record['name'],
+                        suffix=file_record['suffix'],
+                        size=file_record['size'],
+                        modified_time=file_record['modified_time'],
+                        directory_file_record_id=file_record['directory_file_record_id'],
+                        md5=file_record['md5'],
+                        file_record_id=file_record_id
+                    )
+        except Exception as e:
+            for each in main_files:
+                if exists(each):
+                    os.remove(each)
+            assert exists(self.backup_database_path) or RunTimeError(f'写入主数据库时发生异常：{e}，但找不到备份数据库')
+            shutil.move(self.backup_database_path, self.main_database_path)
+            if exists(self.temp_backup_database_path):
+                shutil.move(self.temp_backup_database_path, self.backup_database_path)
+            raise RunTimeError(f'写入主数据库时发生异常：{e}')
 
     def begin_transaction(self) -> BruteTransaction:
         return BruteTransaction(self)
