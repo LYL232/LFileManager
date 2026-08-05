@@ -280,7 +280,7 @@ class BaseScript(metaclass=ABCMeta):
 
 
 class DataBaseScript(BaseScript, metaclass=ABCMeta):
-    def __init__(self, database_config: Union[str, dict], *args, database: Database = None, **kwargs):
+    def __init__(self, database_config: Union[str, dict], *args, database: Database | None = None, **kwargs):
         super().__init__(*args, **kwargs)
         if isinstance(database_config, str):
             with open(database_config, 'r', encoding='utf8') as file:
@@ -524,7 +524,7 @@ class SingleTransactionScript(DataBaseScript, metaclass=ABCMeta):
             transaction.rollback()
             raise e
 
-    def before_transaction(self, *args):
+    def before_transaction(self, *args, **kwargs):
         """
         在事务开始前的动作
         :param args: 脚本运行时参数
@@ -532,14 +532,14 @@ class SingleTransactionScript(DataBaseScript, metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def transaction_action(self, *args) -> int:
+    def transaction_action(self, *args, **kwargs) -> int:
         """
         需要进行的事务操作
         :param args: 脚本参数
         :return: 脚本返回值
         """
 
-    def after_transaction_commit(self, *args):
+    def after_transaction_commit(self, *args, **kwargs):
         """
         事务成功提交后的动作
         :param args: 脚本运行时参数

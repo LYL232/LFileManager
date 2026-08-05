@@ -1,11 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import List
-from os.path import abspath, isdir, join
-import time
-from datetime import datetime
+from os.path import isdir, join
 import os
-from .file import FileRecord
 
 
 @dataclass(init=False, slots=True)
@@ -30,13 +27,13 @@ class RepositoryInstance:
     """
     仓库实际存在的位置和位置名称
     """
-    repository: Repository
+    repository_name: str
     instance_name: str  # 是一个能区分物理存储位置的字符串，比如"第一台笔记本的机械盘"
-    path: str = None  # 该仓库实例目前的路径
+    path: str | None = None  # 该仓库实例目前的路径
 
     @property
     def copy(self) -> RepositoryInstance:
-        return RepositoryInstance(self.repository.copy, self.instance_name, self.path)
+        return RepositoryInstance(self.repository_name, self.instance_name, self.path)
 
     @classmethod
     def get_file_paths_of_dir(cls, dir_abs_path: str) -> List[str]:

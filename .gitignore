@@ -7,3 +7,5 @@ tmp*
 
 *.json
 !db_config.json
+
+.lfm_default_database

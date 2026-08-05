@@ -56,10 +56,37 @@ class Database(metaclass=ABCMeta):
         :return: None
         """
 
-    @abstractmethod
     def new_repository(self, name: str, desc: str) -> bool:
         """
-        创建一个新的需要管理的仓库
+        创建一个新的需要管理的仓库，做基本检查之后调用_new_repository
+        :param name: 仓库名，不能重复
+        :param desc: 描述
+        :return: 是否创建成功
+        """
+        assert self.repository_name_check(name) or DataError(f'仓库名字：{name}是非法的')
+        assert self.repository_desc_check(desc) or DataError(f'仓库描述：{desc}是非法的')
+        return self._new_repository(name, desc)
+
+    @staticmethod
+    def repository_name_check(name: str) -> bool:
+        illegal_char = [',', ' ', '/', '\\']
+        for each in illegal_char:
+            if each in name:
+                return False
+        return True
+
+    @staticmethod
+    def repository_desc_check(desc: str) -> bool:
+        illegal_char = [',', ' ', '/', '\\']
+        for each in illegal_char:
+            if each in desc:
+                return False
+        return True
+
+    @abstractmethod
+    def _new_repository(self, name: str, desc: str) -> bool:
+        """
+        创建一个新的需要管理的仓库实际实现函数
         :param name: 仓库名，不能重复
         :param desc: 描述
         :return: 是否创建成功
@@ -81,7 +108,7 @@ class Database(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def repository_instances(self, repository: Repository) -> List[RepositoryInstance]:
+    def repository_instances(self, repository: Repository) -> Dict[str, RepositoryInstance]:
         """
         一个仓库所关联的实例信息
         :param repository: 仓库名称
@@ -275,7 +302,7 @@ class Database(metaclass=ABCMeta):
             self,
             file_record_property: str,
             keyword: str,
-            repository_name: str = None
+            repository_name: str | None = None
     ) -> List[FileRecord]:
         """
         在文件记录的指定字段中寻找指定关键字
@@ -287,7 +314,7 @@ class Database(metaclass=ABCMeta):
 
     @abstractmethod
     def query_file_record_ids_by_size_and_md5(
-            self, size: int, md5: str, repository_name: str = None
+            self, size: int, md5: str, repository_name: str | None = None
     ) -> List[int]:
         """
         根据指定的md5值查询所有的文件记录id

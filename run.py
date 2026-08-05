@@ -3,12 +3,14 @@ import sys
 import io
 from scripts import SCRIPTS
 from error import ArgumentError, OperationError
+from os.path import abspath, join
 
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('script', type=str, choices=list(SCRIPTS.keys()), help='需要运行的脚本')
     parser.add_argument('script_args', type=str, nargs='*')
+    parser.add_argument('--database_config', type=str, default=None, help='数据库配置')
     return parser.parse_args()
 
 
@@ -20,6 +22,8 @@ def main():
 
     try:
         database_config, script_args = args.database_config, args.script_args or []
+        if database_config is None:
+            database_config = abspath(join(__file__, '..', 'database_config.json'))
         with SCRIPTS[args.script](database_config=database_config) as script:
             return script(*script_args)
     except OperationError as e:

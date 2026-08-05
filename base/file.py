@@ -5,6 +5,8 @@ import os
 import platform
 import time
 from typing import Dict
+
+
 # from base import RepositoryInstance
 
 
@@ -23,9 +25,9 @@ class FileRecord:
             suffix: str,
             size: int,
             modified_time: float,
-            directory_file_record_id: int = None,
-            md5: str = None,
-            file_record_id: int = None
+            directory_file_record_id: int | None = None,
+            md5: str | None = None,
+            file_record_id: int | None = None
     ):
         """
         :param size: 该文件的大小，单位为字节
@@ -35,7 +37,7 @@ class FileRecord:
         :param suffix: 文件后缀
         """
         assert size >= 0, f'文件的大小为{size}不能小于等于0'
-        assert isinstance(modified_time, int)
+        assert isinstance(modified_time, float)
 
         self.file_record_id = file_record_id
 
@@ -118,11 +120,10 @@ class FileRecord:
     def __hash__(self):
         return hash(self.identity)
 
-    def __eq__(self, other):
+    def __eq__(self, other: object):
         if not isinstance(other, FileRecord):
             return False
         return self.identity == other.identity
-
 
 # class FileInstance:
 #     # 128MB的读取缓存
