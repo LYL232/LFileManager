@@ -5,6 +5,7 @@ import os
 import platform
 import time
 from typing import Dict
+from error import DataError
 
 
 # from base import RepositoryInstance
@@ -36,8 +37,10 @@ class FileRecord:
         :param name: 文件名
         :param suffix: 文件后缀
         """
-        assert size >= 0, f'文件的大小为{size}不能小于等于0'
-        assert isinstance(modified_time, float)
+        assert size >= 0, DataError(f'文件的大小为{size}不能小于0')
+        assert isinstance(modified_time, float), DataError(f'时间必须为浮点数')
+        assert '\\' not in name and '\\' not in suffix or DataError(f'文件名：{name}{suffix}中存在非法字符\\')
+        assert '/' not in name and '/' not in suffix or DataError(f'文件名：{name}{suffix}中存在非法字符/')
 
         self.file_record_id = file_record_id
 
@@ -70,6 +73,7 @@ class FileRecord:
     def json_obj(self) -> dict:
         return {
             'file_record_id': self.file_record_id,
+            '': self.repository_name,
             'directory_file_record_id': self.directory_file_record_id,
             'name': self.name,
             'size': self.size,

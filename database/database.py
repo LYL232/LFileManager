@@ -68,20 +68,20 @@ class Database(metaclass=ABCMeta):
         return self._new_repository(name, desc)
 
     @staticmethod
-    def repository_name_check(name: str) -> bool:
+    def name_single_character_check(name: str) -> bool:
         illegal_char = [',', ' ', '/', '\\']
         for each in illegal_char:
             if each in name:
                 return False
         return True
 
-    @staticmethod
-    def repository_desc_check(desc: str) -> bool:
-        illegal_char = [',', ' ', '/', '\\']
-        for each in illegal_char:
-            if each in desc:
-                return False
-        return True
+    @classmethod
+    def repository_name_check(cls, name: str) -> bool:
+        return cls.name_single_character_check(name)
+
+    @classmethod
+    def repository_desc_check(cls, desc: str) -> bool:
+        return cls.name_single_character_check(desc)
 
     @abstractmethod
     def _new_repository(self, name: str, desc: str) -> bool:

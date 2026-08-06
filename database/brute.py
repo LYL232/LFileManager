@@ -70,7 +70,7 @@ class BruteDatabase(Database):
             join(directory_path, 'repositories.csv'),
             join(directory_path, 'repository_root.csv'),
             join(directory_path, 'repository_instance.csv'),
-            join(directory_path, 'file_record.jsonl'),
+            join(directory_path, 'file_record.csv'),
         )
 
     @classmethod
@@ -88,42 +88,61 @@ class BruteDatabase(Database):
         with open(repository_file_path, 'r', encoding='utf-8') as file:
             line = file.readline()
             while line:
+                print(line)
                 name, desc = line.strip().split(',')
                 repository[name] = Repository(name, desc)
+                line = file.readline()
         with open(repository_root_file_path, 'r', encoding='utf-8') as file:
             line = file.readline()
             while line:
                 name, root_file_id = line.strip().split(',')
                 repository_root[name] = int(root_file_id)
-        # with open(repository_instance_file_path, 'r', encoding='utf-8') as file:
-        #     line = file.readline()
-        #     while line:
-        #         items = line.strip().split('/')
-        #         repository_name, instance_name = items[:2]
-        #         path = '/'.join(items[2:])
-        #         repository_instances = repository_instance.get(repository_name, None)
-        #         if repository_instances is None:
-        #             repository_instance[repository_name] = repository_instances = {}
-        #         repository_instances[instance_name] = RepositoryInstance(
-        #             repository_name=repository_name,
-        #             instance_name=instance_name,
-        #             path=path
-        #         )
+                line = file.readline()
+        with open(repository_instance_file_path, 'r', encoding='utf-8') as file:
+            line = file.readline()
+            while line:
+                items = line.strip().split('/')
+                repository_name, instance_name = items[:2]
+                path = '/'.join(items[2:])
+                repository_instances = repository_instance.get(repository_name, None)
+                if repository_instances is None:
+                    repository_instance[repository_name] = repository_instances = {}
+                repository_instances[instance_name] = RepositoryInstance(
+                    repository_name=repository_name,
+                    instance_name=instance_name,
+                    path=path
+                )
+                line = file.readline()
         with open(file_record_path, 'r', encoding='utf-8') as file:
             line = file.readline()
             while line:
-                file_record_obj = json.loads(line)
-                file_record_id = file_record_obj['file_record_id']
+                (
+                    repository_name,
+                    file_record_id,
+                    name,
+                    suffix,
+                    size,
+                    modified_time,
+                    directory_file_record_id,
+                    md5
+                ) = line.strip().split('/')
+                file_record_id = int(file_record_id)
+                size = int(size)
+                modified_time = float(modified_time)
+                directory_file_record_id = int(directory_file_record_id)
+                if directory_file_record_id < 0:
+                    directory_file_record_id = None
                 file_record[file_record_id] = FileRecord(
-                    repository_name=file_record_obj['repository_name'],
-                    name=file_record['name'],
-                    suffix=file_record['suffix'],
-                    size=file_record['size'],
-                    modified_time=file_record['modified_time'],
-                    directory_file_record_id=file_record['directory_file_record_id'],
-                    md5=file_record['md5'],
-                    file_record_id=file_record_id
+                    repository_name=repository_name,
+                    file_record_id=file_record_id,
+                    name=name,
+                    suffix=suffix,
+                    size=size,
+                    modified_time=modified_time,
+                    directory_file_record_id=directory_file_record_id,
+                    md5=md5,
                 )
+                line = file.readline()
         return BruteDatabaseImage(
             repository=repository,
             repository_root=repository_root
@@ -156,6 +175,7 @@ class BruteDatabase(Database):
             backup_file_record_path
         ) = self._get_data_base_file_paths(self.backup_database_path)
 
+        # 移动主数据库到备份路径
         try:
             shutil.copy2(main_repository_file_path, backup_repository_file_path)
             shutil.copy2(main_repository_root_file_path, backup_repository_root_file_path)
@@ -172,45 +192,36 @@ class BruteDatabase(Database):
             RunTimeError(f'无法备份主数据库，异常：{e}')
 
         image = self._current_image
-        repository_instance = image.repository_instance
-        file_record = image.file_record
 
+        # 写入主数据
         try:
             with open(main_repository_file_path, 'w', encoding='utf-8') as file:
                 for name, repository in image.repository.items():
                     file.write(f'{name},{repository.desc}\n')
-            with open(main_repository_root_file_path, 'r', encoding='utf-8') as file:
+            with open(main_repository_root_file_path, 'w', encoding='utf-8') as file:
                 for name, root_file_id in image.repository_root.items():
                     file.write(f'{name},{root_file_id}\n')
-            with open(main_repository_instance_file_path, 'r', encoding='utf-8') as file:
-                line = file.readline()
-                while line:
-                    items = line.strip().split('/')
-                    repository_name, instance_name = items[:2]
-                    path = '/'.join(items[2:])
-                    repository_instances = repository_instance.get(repository_name, None)
-                    if repository_instances is None:
-                        repository_instance[repository_name] = repository_instances = {}
-                    repository_instances[instance_name] = RepositoryInstance(
-                        repository_name=repository_name,
-                        instance_name=instance_name,
-                        path=path
+            with open(main_repository_instance_file_path, 'w', encoding='utf-8') as file:
+                for repository_name, repository_instances in image.repository_instance.items():
+                    for instance_name, instance in repository_instances.items():
+                        file.write(f'{instance_name}/{repository_name}/{instance.path}\n')
+            with open(main_file_record_path, 'w', encoding='utf-8') as file:
+                for file_record in image.file_record.values():
+                    # file.write(f'{json.dumps(file_record.json_obj)}\n')
+                    assert file_record.file_record_id is not None
+                    items = (
+                        file_record.repository_name,
+                        str(file_record.file_record_id),
+                        file_record.name,
+                        file_record.suffix,
+                        str(file_record.size),
+                        str(file_record.modified_time),
+                        '-1' if file_record.directory_file_record_id is None \
+                            else str(file_record.directory_file_record_id) ,
+                        file_record.md5
                     )
-            with open(self.repository_instance_file_path, 'r', encoding='utf-8') as file:
-                line = file.readline()
-                while line:
-                    file_record_obj = json.loads(line)
-                    file_record_id = file_record_obj['file_record_id']
-                    file_record[file_record_id] = FileRecord(
-                        repository_name=file_record_obj['repository_name'],
-                        name=file_record['name'],
-                        suffix=file_record['suffix'],
-                        size=file_record['size'],
-                        modified_time=file_record['modified_time'],
-                        directory_file_record_id=file_record['directory_file_record_id'],
-                        md5=file_record['md5'],
-                        file_record_id=file_record_id
-                    )
+                    file.write('/'.join(items) + '\n')
+
         except Exception as e:
             for each in main_files:
                 if exists(each):
@@ -221,15 +232,23 @@ class BruteDatabase(Database):
                 shutil.move(self.temp_backup_database_path, self.backup_database_path)
             raise RunTimeError(f'写入主数据库时发生异常：{e}')
 
+    def copy_current_image(self) -> BruteDatabaseImage:
+        return self._current_image.copy
+
+    def reset_current_image(self, image: BruteDatabaseImage):
+        self._current_image = image
+
     def begin_transaction(self) -> BruteTransaction:
         return BruteTransaction(self)
 
     def initialize_database(self):
         print(f'初始化数据库于{self.data_base_root_path}')
-        repository_file_path = join(self.main_database_path, 'repositories.csv')
-        repository_root_file_path = join(self.main_database_path, 'repository_root.csv')
-        repository_instance_file_path = join(self.main_database_path, 'repository_instance.csv')
-        file_record_path = join(self.main_database_path, 'file_record.jsonl')
+        (
+            repository_file_path,
+            repository_root_file_path,
+            repository_instance_file_path,
+            file_record_path
+        ) = self._get_data_base_file_paths(self.main_database_path)
         os.makedirs(self.main_database_path, exist_ok=False)
         with open(repository_file_path, 'w', encoding='utf-8') as _:
             pass
@@ -241,11 +260,7 @@ class BruteDatabase(Database):
             pass
 
     def is_initialized(self) -> bool:
-        return all(exists(each) for each in [
-            self.repository_file_path,
-            self.repository_instance_file_path,
-            self.file_record_path
-        ])
+        return all(exists(each) for each in self._get_data_base_file_paths(self.main_database_path))
 
     def delete_database(self):
         """
@@ -528,10 +543,10 @@ class BruteDatabase(Database):
 class BruteTransaction(Transaction):
     def __init__(self, database: BruteDatabase):
         self.database = database
-        self.transaction_begin_image = database._current_image
+        self.transaction_image = database.copy_current_image()
 
     def commit(self):
-        pass
+        self.database.save_current_image_to_database()
 
     def rollback(self):
-        pass
+        self.database.reset_current_image(self.transaction_image)
