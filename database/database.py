@@ -3,6 +3,7 @@ from typing import List, Dict, Tuple
 
 from base import Repository, RepositoryInstance, FileRecord
 from error import DataError
+from .str_check import name_single_character_check
 
 
 class Transaction(metaclass=ABCMeta):
@@ -68,20 +69,12 @@ class Database(metaclass=ABCMeta):
         return self._new_repository(name, desc)
 
     @staticmethod
-    def name_single_character_check(name: str) -> bool:
-        illegal_char = [',', ' ', '/', '\\']
-        for each in illegal_char:
-            if each in name:
-                return False
-        return True
+    def repository_name_check(name: str) -> bool:
+        return name_single_character_check(name)
 
-    @classmethod
-    def repository_name_check(cls, name: str) -> bool:
-        return cls.name_single_character_check(name)
-
-    @classmethod
-    def repository_desc_check(cls, desc: str) -> bool:
-        return cls.name_single_character_check(desc)
+    @staticmethod
+    def repository_desc_check(desc: str) -> bool:
+        return name_single_character_check(desc)
 
     @abstractmethod
     def _new_repository(self, name: str, desc: str) -> bool:
@@ -101,6 +94,14 @@ class Database(metaclass=ABCMeta):
         """
 
     @abstractmethod
+    def find_repository(self, name: str) -> Repository:
+        """
+        直接返回指定名字的仓库对象，如果不存在抛出异常
+        :param name: 仓库名
+        :return: 仓库对象
+        """
+
+    @abstractmethod
     def repositories(self) -> List[Repository]:
         """
         查询所有仓库
@@ -108,10 +109,10 @@ class Database(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def repository_instances(self, repository: Repository) -> Dict[str, RepositoryInstance]:
+    def repository_instances(self, repository_name: str) -> Dict[str, RepositoryInstance]:
         """
         一个仓库所关联的实例信息
-        :param repository: 仓库名称
+        :param repository_name: 仓库名称
         :return: 没有时返回空列表
         """
 
@@ -124,13 +125,9 @@ class Database(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def is_repository_instance_exists(
-            self,
-            repository: Repository,
-            instance_name: str
-    ) -> bool:
+    def is_repository_instance_exists(self, repository_name: str, instance_name: str) -> bool:
         """
-        :param repository: 仓库
+        :param repository_name: 仓库名字
         :param instance_name: 实例名称
         :return: 数据库中是否有相关记录
         """
@@ -138,43 +135,42 @@ class Database(metaclass=ABCMeta):
     @abstractmethod
     def new_repository_instance(
             self,
-            repository: Repository,
+            repository_name: str,
             instance_name: str,
             path: str
     ) -> bool:
         """
         写入仓库实例记录，要求不能存在相同的仓库名和仓库实例名，仓库必须存在
-        :param repository: 仓库
+        :param repository_name: 仓库名字
         :param instance_name: 实例名称
         :param path: 指向该仓库实例的路径
         :return: 1表示操作成功，0表示操作失败
         """
 
     @abstractmethod
-    def update_repository_instance(self, instance: RepositoryInstance) -> bool:
+    def update_repository_instance(self, repository_name: str, instance_name: str, path: str) -> bool:
         """
         修改仓库实例记录，要求存在相同的仓库名和仓库实例名
-        :param instance: 仓库实例
-        :return: 1表示操作成功，0表示操作失败
+        :param repository_name: 仓库名字
+        :param instance_name: 实例名字
+        :param path: 物理路径
+        :return: 表示操作是否成功
         """
 
     @abstractmethod
-    def remove_repository_instance(self, instance: RepositoryInstance) -> bool:
+    def remove_repository_instance(self, repository_name: str, instance_name: str) -> bool:
         """
         删除一个仓库实例
-        :param instance: 仓库实例名
-        :return: 1表示操作成功，0表示操作失败
+        :param repository_name: 仓库名字
+        :param instance_name: 实例名字
+       :return: 表示操作是否成功
         """
 
     @abstractmethod
-    def query_repository_instance(
-            self,
-            repository: Repository,
-            instance_name: str
-    ) -> RepositoryInstance:
+    def find_repository_instance(self, repository_name: str, instance_name: str) -> RepositoryInstance:
         """
-        查询仓库实例
-        :param repository: 仓库
+        查询仓库实例，找不到就抛出异常
+        :param repository_name: 仓库名字
         :param instance_name: 实例名字
         :return: 仓库实例数据
         """
@@ -211,10 +207,10 @@ class Database(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def repository_file_records(self, repository: Repository) -> List[FileRecord]:
+    def repository_file_records(self, repository_name: str) -> List[FileRecord]:
         """
         读取指定文件记录下的文件记录
-        :param repository: 仓库
+        :param repository_name: 仓库名字
         :return: 数据库中的文件记录列表
         """
 

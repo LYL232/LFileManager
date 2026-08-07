@@ -1,5 +1,5 @@
 from abc import abstractmethod, ABCMeta
-from typing import Union, List, Dict, Tuple, Set
+from typing import Union, List, Dict, Tuple, Set, Callable
 import json
 from json.decoder import JSONDecodeError
 import os
@@ -22,17 +22,19 @@ class BaseScript(metaclass=ABCMeta):
         self.base_kwargs = kwargs
 
     @abstractmethod
-    def __call__(self, *args) -> int:
+    def __call__(self, *args, **kwargs) -> int:
         pass
 
     @classmethod
-    def check_empty_args(cls, *args) -> bool:
+    def check_empty_args(cls, *args, **kwargs) -> bool:
         """
         检查位置参数args是否为空
         :param args: 位置参数
+        :param kwargs: 名字参数
         :return: 是否为空
         """
-        assert len(args) == 0 or ArgumentError(f'{cls.__name__}收到了额外的运行参数：{args}')
+        assert len(args) == 0 and len(kwargs) == 0, ArgumentError(f'{cls.__name__}收到了额外的运行参数：{args}, {kwargs}')
+        return True
 
     def __enter__(self):
         return self
@@ -41,7 +43,7 @@ class BaseScript(metaclass=ABCMeta):
         pass
 
     @staticmethod
-    def load_manage_info(lyl232fm_dir) -> dict:
+    def _load_instance_info(lyl232fm_dir) -> dict:
         """
         加载管理目录里的信息
         :param lyl232fm_dir: 管理的目录的.lyl232fm路径
@@ -98,7 +100,7 @@ class BaseScript(metaclass=ABCMeta):
         return res
 
     @staticmethod
-    def write_csv(path: str, data: List[tuple], headers: List[str] = None) -> None:
+    def write_csv(path: str, data: List[tuple], headers: List[str] | None = None) -> None:
         """
         :param path: 路径
         :param data: 数据
@@ -116,12 +118,12 @@ class BaseScript(metaclass=ABCMeta):
                 file.write('\\'.join([str(item) for item in each]) + '\n')
 
     @staticmethod
-    def _write_manage_info(dir_path, name: str, tag: str):
+    def _write_repository_instance_info(dir_path, repository_name: str, instance_name: str):
         """
         向管理目录.lyl232fm写入管理信息
         :param dir_path: 管理的目录的路径
-        :param name: 目录名称
-        :param tag: 管理标签
+        :param repository_name: 目录名称
+        :param instance_name: 实例名称
         :return: None
         """
         fm_dir = join(dir_path, '.lyl232fm')
@@ -129,8 +131,8 @@ class BaseScript(metaclass=ABCMeta):
             os.makedirs(fm_dir, exist_ok=True)
             with open(join(fm_dir, 'info'), 'w', encoding='utf8') as file:
                 json.dump({
-                    'name': name,
-                    'tag': tag
+                    'repository': repository_name,
+                    'instance_name': instance_name
                 }, file, ensure_ascii=False, indent=2)
         except Exception as e:
             RunTimeError(f'创建本程序管理目录：{fm_dir}出错，具体异常为：\n{e}')
@@ -245,7 +247,7 @@ class BaseScript(metaclass=ABCMeta):
         return outputs
 
     @staticmethod
-    def _find_management_dir(path: str) -> Union[str, None]:
+    def _find_maintain_diretory(path: str) -> Union[str, None]:
         """
         从一个路径开始往上查找.lyl232fm目录
         :param path: 路径
@@ -311,7 +313,7 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.db.close()
 
-    def transaction(self, func: callable, *args, **kwargs):
+    def transaction(self, func: Callable, *args, **kwargs):
         transaction = self.db.begin_transaction()
         try:
             res = func(*args, **kwargs)
@@ -330,7 +332,7 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
         self.init_db_if_needed()
         if name is None:
             try:
-                name = self.load_manage_info(self._find_management_dir('.'))['name']
+                name = self._load_instance_info(self._find_maintain_diretory('.'))['name']
             except (JSONDecodeError, FileNotFoundError) as e:
                 print(e)
                 raise OperationError(f'请指定查询的目录名字')

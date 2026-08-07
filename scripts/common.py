@@ -10,8 +10,9 @@ import shutil
 from abc import abstractmethod, ABCMeta
 
 from scripts import DataBaseScript, SingleTransactionScript, FileMD5ComputingScript
-from error import OperationError, RunTimeError, CodingError
-from base import FileRecord
+from database import name_single_character_check
+from error import OperationError, RunTimeError, CodingError, DataError
+from base import FileRecord, RepositoryInstance
 
 
 class MakeDirectoryScript(SingleTransactionScript):
@@ -46,8 +47,8 @@ class RemoveRepositoryScript(SingleTransactionScript):
         return 0
 
 
-class QueryDirectoryScript(DataBaseScript):
-    def __call__(self, name: str = None, *args) -> int:
+class QueryRepositoryScript(DataBaseScript):
+    def __call__(self, name: str | None = None, *args) -> int:
         """
         查询所有被管理的目录的脚本
         :param directory: 目录名字，如果为空，则为查询所有目录
@@ -58,37 +59,46 @@ class QueryDirectoryScript(DataBaseScript):
         self.init_db_if_needed()
         if name is None:
             for directory in self.db.repositories():
-                print(f'目录：{directory.name}，描述：{directory.desc}，id：{directory.dir_id}')
+                print(f'仓库：{directory.name}，描述：{directory.desc}')
         else:
-            assert self.db.repository_id(name) is not None, OperationError(f'目录名字：{name}不存在')
-            for tag, path in self.db.managements(name):
-                if exists(path):
-                    print(f'标识：{tag}，路径：{path}')
+            for name, instance in self.db.repository_instances(name).items():
+                if instance.path is not None and exists(instance.path):
+                    print(f'实例：{name}，路径：{instance.path}')
                 else:
-                    print(f'标识：{tag}，路径：{path}（不存在）')
+                    path = '无' if instance.path is None else instance.path
+                    print(f'实例：{name}，路径：{path}（不存在）')
         return 0
 
 
-class ManageDirectoryScript(FileMD5ComputingScript):
-    def __call__(self, dir_path: str = '.', name: str = None, tag: str = None, *args) -> int:
+class MakeRepositoryInstanceScript(FileMD5ComputingScript):
+    def __call__(
+            self,
+            path: str = '.',
+            repository_name: str | None = None,
+            instance_name: str | None = None,
+            *args, **kwargs
+    ) -> int:
         """
-        管理一个新的物理目录的脚本
-        :param dir_path: 目录的路径
-        :param name: 目录名字
-        :param tag: 目录标识，不能与其他标识重复
+        创建一个新的仓库实体的脚本
+        :param path: 实例路径
+        :param repository_name: 仓库名字
+        :param instance_name: 实例名字
+
         :return: 0表示正常
         """
         self.check_empty_args(*args)
-        self.init_db_if_needed()
-        dir_path = abspath(dir_path)
-        assert tag is None or 0 < len(tag) <= 255, OperationError('管理标识允许的最大长度为255')
-        assert isdir(dir_path), OperationError(f'{dir_path}不是一个目录')
+        assert instance_name is None or name_single_character_check(instance_name) or DataError('实例名字存在违法字符')
 
-        dir_id, dir_path = self.maintain_management(dir_path, name, tag)
+        self.init_db_if_needed()
+        path = abspath(path)
+        assert instance_name is None or 0 < len(instance_name) <= 255 or OperationError('实例名字允许的最大长度为255')
+        assert isdir(path), OperationError(f'{path}不是一个目录')
+
+        repository_instance = self._get_repository_instance_from_path(path, repository_name, instance_name)
 
         # 获取当前目录的所有文件信息记录
-        db_records = self.db.repository_file_records(dir_id)
-        local_records = FileRecord.get_dir_file_instances(dir_path)
+        db_records = self.db.repository_file_records(repository_instance.repository_name)
+        local_records = repository_instance.get_dir_file_instances(repository_name)
         if len(db_records) == 0:
             total_size = sum(each.size for each in local_records)
             if self.input_query(
@@ -105,55 +115,67 @@ class ManageDirectoryScript(FileMD5ComputingScript):
                                                 file_records=local_records)
             print(f'更新了{created_rows}条记录')
             return 0
-        self._compare_local_records_to_db_records(dir_path, dir_id, local_records, db_records)
-        if self.check_empty_dir(dir_path) and self.input_query('检测到存在空目录，是否删除它们？'):
-            self.remove_empty_dir(dir_path)
+        self._compare_local_records_to_db_records(repository_name, dir_id, local_records, db_records)
+        if self.check_empty_dir(repository_name) and self.input_query('检测到存在空目录，是否删除它们？'):
+            self.remove_empty_dir(repository_name)
         return 0
 
-    def maintain_management(self, dir_path: str, name: str, tag: str):
+    def _get_repository_instance_from_path(
+            self, path: str, repository_name: str | None, instance_name: str | None
+    ) -> RepositoryInstance:
         """
-        维护目录管理信息
-        :param dir_path: 目录的物理路径
-        :param name: 目录名字
-        :param tag: 目录标签
+        维护仓库实例信息
+        :param path: 物理路径
+        :param repository_name: 仓库名字
+        :param instance_name: 实例名字
+
         :return: 目录id
         """
-        fm_dir = self._find_management_dir(dir_path)
+        fm_dir = self._find_maintain_diretory(path)
         if fm_dir is None:
             # fm_dir不存在
-            assert name is not None, OperationError(
-                f'目录名字缺失，而且目标路径{dir_path}不存在.lyl232fm文件夹，无法操作')
-            assert tag is not None, OperationError(
-                f'目录管理标识缺失，而且目标路径{dir_path}不存在.lyl232fm文件夹，无法操作')
+            assert repository_name is not None, OperationError(
+                f'仓库名字缺失，而且目标路径{path}不存在.lyl232fm文件夹，无法操作')
+            assert instance_name is not None, OperationError(
+                f'仓库实例名字缺失，而且目标路径{path}不存在.lyl232fm文件夹，无法操作')
 
-            dir_id = self.db.repository_id(name)
-            assert dir_id is not None, OperationError(
-                f'管理目录名字{name}并未被注册，无法关联，请使用mkdir脚本创建新的管理目录')
-            assert not self.db.is_repository_instance_exists(tag), OperationError(f'标识：{tag}已经存在，无法关联')
-            self._write_manage_info(dir_path, name, tag)
-            self.transaction(self._create_or_update_management, dir_id=dir_id, tag=tag, dir_path=dir_path)
+            assert self.db.is_repository_exists(repository_name), OperationError(
+                f'仓库名字{repository_name}并未被创建，无法关联，请使用mkrepo脚本创建该仓库')
+            assert not self.db.is_repository_instance_exists(repository_name, instance_name), \
+                OperationError(f'仓库实例：{instance_name}已经存在，无法操作')
+            self._write_repository_instance_info(path, repository_name, instance_name)
+            repository_instance = self.transaction(
+                self._create_or_update_repository_instance,
+                repository_name=repository_name,
+                instance_name=instance_name,
+                path=path
+            )
         else:
-            dir_path = dirname(fm_dir)
+            path = dirname(fm_dir)
             try:
-                info = self.load_manage_info(fm_dir)
+                info = self._load_instance_info(fm_dir)
             except (JSONDecodeError, FileNotFoundError):
                 raise OperationError(
                     f'该目录下存在由本程序维护的.lyl232fm文件夹：{fm_dir}，但无法读取出有效信息，请删除该.lyl232fm文件夹')
 
-            if (name is not None and info['name'] != name) or (
-                    tag is not None and info['tag'] != tag
+            if (repository_name is not None and info['repository_name'] != repository_name) or (
+                    instance_name is not None and info['instance_name'] != instance_name
             ):
+                repository_name = repository_name or 'None'
+                instance_name = instance_name or 'None'
                 raise OperationError(
-                    f'该目录属于目录{info["name"]}且标识为{info["tag"]}。'
-                    f'而不是指定的目录{name}且管理标识为{tag}，无法操作'
+                    f'该目录属于仓库{info["repository"]}且实例为{info["instance"]}。'
+                    f'而不是指定的目录{repository_name}且管理标识为{instance_name}，无法操作'
                 )
             # 更新数据库中管理的path字段
-            name, tag = name or info['name'], tag or info['tag']
-            dir_id = self.db.repository_id(name)
-            self.transaction(self._create_or_update_management, dir_id=dir_id, tag=tag, dir_path=dir_path)
-            assert dir_id is not None, OperationError(
-                f'管理目录名字{name}并未被注册，无法关联，请使用mkdir脚本创建新的管理目录')
-        return dir_id, dir_path
+            repository_name, instance_name = repository_name or info['name'], instance_name or info['tag']
+            repository_instance = self.transaction(
+                self._create_or_update_repository_instance,
+                repository_name=repository_name,
+                instance_name=instance_name,
+                path=path
+            )
+        return repository_instance
 
     def _compare_local_records_to_db_records(
             self,
@@ -753,13 +775,16 @@ class ManageDirectoryScript(FileMD5ComputingScript):
         print(f'通过比较md5值，共发现{len(res)}个文件的md5值与数据库中的相应记录不同')
         return res
 
-    def _create_or_update_management(self, dir_id: int, tag: str, dir_path):
-        if self.db.is_repository_instance_exists(tag):
-            # 存在记录则更新
-            self.db.update_management(tag=tag, path=dir_path)
-            return
-        assert self.db.new_repository_instance(dir_id=dir_id, tag=tag, path=dir_path) == 1, RunTimeError(
-            '创建管理信息失败！')
+    def _create_or_update_repository_instance(self, repository_name: str, instance_name: str, path: str):
+        try:
+            assert self.db.update_repository_instance(repository_name, instance_name, path) or \
+                   RunTimeError(f'更新仓库实例：{repository_name}/{instance_name}/{path} 失败！')
+        except DataError:
+            assert self.db.new_repository_instance(
+                repository_name=repository_name,
+                instance_name=instance_name,
+                path=path
+            ), RunTimeError(f'创建仓库实例：{repository_name}/{instance_name}/{path} 失败！')
 
 
 class CancelManagementScript(SingleTransactionScript):
@@ -802,43 +827,6 @@ class QueryFileRecordScript(DataBaseScript):
         outputs = self.file_record_output_lines(self.db.repository_file_records(dir_id))
         self.write_or_output_lines_to_file(outputs, write_path)
         return 0
-
-
-class DumpDatabaseScript(DataBaseScript):
-    def __call__(self, out_dir: str, *args):
-        self.check_empty_args(*args)
-        assert not exists(out_dir), OperationError(f'输出目录{out_dir}必须为空。')
-        os.makedirs(out_dir)
-        self.write_csv(
-            join(out_dir, 'directory.csv'),
-            [(record.dir_id, record.name, record.desc) for record in self.db.repositories()],
-            headers=['id', 'name', 'des']
-        )
-        self.write_csv(
-            join(out_dir, 'management.csv'),
-            [
-                (
-                    record.tag,
-                    record.path.replace('\\', '/'),  # 将反斜杠换成正斜杠
-                    record.dir_id
-                )
-                for record in self.db.all_managements()
-            ],
-            headers=['tag', 'path', 'dir_id']
-        )
-        self.write_csv(
-            join(out_dir, 'file.csv'),
-            [
-                (
-                    record.file_id, record.dir_path, record.name,
-                    record.suffix, record.md5, record.size,
-                    record.directory_id, record.modified_time
-                )
-                for record in self.db.all_file_records()
-            ],
-            headers=['id', 'dir_path', 'name', 'suffix', 'md5', 'size', 'dir_id', 'modified_timestamp']
-        )
-        print(f'数据已写入{out_dir}')
 
 
 class QueryRedundantFileScript(FileMD5ComputingScript):

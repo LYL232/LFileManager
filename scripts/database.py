@@ -5,7 +5,7 @@ import os
 from os.path import join, exists, abspath, dirname
 from scripts import DataBaseScript
 from base import FileRecord, Repository, RepositoryInstance
-from error import RunTimeError
+from error import RunTimeError, OperationError
 
 
 class InitializeDataBaseScript(DataBaseScript):
@@ -77,7 +77,6 @@ class ClearDataBaseScript(DataBaseScript):
     """
 
     def __call__(self, *args) -> int:
-        from scripts import DumpDatabaseScript
         self.check_empty_args(*args)
         dump_script = DumpDatabaseScript(database_config=self.database_config, database=self.db)
         if not self.input_query('您将删除本程序需要的所有数据表，是否继续？'):
@@ -102,3 +101,40 @@ class ClearDataBaseScript(DataBaseScript):
             break
         self.db.delete_database()
         return 0
+
+
+class DumpDatabaseScript(DataBaseScript):
+    def __call__(self, out_dir: str, *args):
+        self.check_empty_args(*args)
+        assert not exists(out_dir), OperationError(f'输出目录{out_dir}必须为空。')
+        os.makedirs(out_dir)
+        self.write_csv(
+            join(out_dir, 'directory.csv'),
+            [(record.dir_id, record.name, record.desc) for record in self.db.repositories()],
+            headers=['id', 'name', 'des']
+        )
+        self.write_csv(
+            join(out_dir, 'management.csv'),
+            [
+                (
+                    record.tag,
+                    record.path.replace('\\', '/'),  # 将反斜杠换成正斜杠
+                    record.dir_id
+                )
+                for record in self.db.all_managements()
+            ],
+            headers=['tag', 'path', 'dir_id']
+        )
+        self.write_csv(
+            join(out_dir, 'file.csv'),
+            [
+                (
+                    record.file_id, record.dir_path, record.name,
+                    record.suffix, record.md5, record.size,
+                    record.directory_id, record.modified_time
+                )
+                for record in self.db.all_file_records()
+            ],
+            headers=['id', 'dir_path', 'name', 'suffix', 'md5', 'size', 'dir_id', 'modified_timestamp']
+        )
+        print(f'数据已写入{out_dir}')

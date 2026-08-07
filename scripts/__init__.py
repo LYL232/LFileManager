@@ -1,13 +1,12 @@
 from .base import BaseScript, DataBaseScript, SingleTransactionScript, FileMD5ComputingScript
-from .database import InitializeDataBaseScript, ClearDataBaseScript
+from .database import InitializeDataBaseScript, ClearDataBaseScript, DumpDatabaseScript
 from .common import (
-    ManageDirectoryScript,
+    MakeRepositoryInstanceScript,
     CancelManagementScript,
     MakeDirectoryScript,
     RemoveRepositoryScript,
-    QueryDirectoryScript,
+    QueryRepositoryScript,
     QueryFileRecordScript,
-    DumpDatabaseScript,
     QueryRedundantFileScript,
     QuerySizeScript,
     FindInFileDirectorPathScript, FindInNameScript, FindInSuffixScript,
@@ -17,11 +16,11 @@ from .common import (
 SCRIPTS = {
     'init_db': InitializeDataBaseScript,
     'clear_db': ClearDataBaseScript,
-    'manage': ManageDirectoryScript,
+    'mkins': MakeRepositoryInstanceScript,
     'cm': CancelManagementScript,
     'mkrepo': MakeDirectoryScript,
     'rm': RemoveRepositoryScript,
-    'ls': QueryDirectoryScript,
+    'ls': QueryRepositoryScript,
     'fr': QueryFileRecordScript,
     'size': QuerySizeScript,
     'dump_db': DumpDatabaseScript,

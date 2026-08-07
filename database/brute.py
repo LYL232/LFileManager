@@ -88,7 +88,6 @@ class BruteDatabase(Database):
         with open(repository_file_path, 'r', encoding='utf-8') as file:
             line = file.readline()
             while line:
-                print(line)
                 name, desc = line.strip().split(',')
                 repository[name] = Repository(name, desc)
                 line = file.readline()
@@ -217,7 +216,7 @@ class BruteDatabase(Database):
                         str(file_record.size),
                         str(file_record.modified_time),
                         '-1' if file_record.directory_file_record_id is None \
-                            else str(file_record.directory_file_record_id) ,
+                            else str(file_record.directory_file_record_id),
                         file_record.md5
                     )
                     file.write('/'.join(items) + '\n')
@@ -292,8 +291,13 @@ class BruteDatabase(Database):
     def is_repository_exists(self, name: str) -> bool:
         return name in self._current_image.repository.keys()
 
-    def repository_instances(self, repository: Repository) -> Dict[str, RepositoryInstance]:
-        return self._current_image.repository_instance[repository.name].copy()
+    def find_repository(self, name: str) -> Repository:
+        res = self._current_image.repository.get(name, None)
+        assert res is not None, OperationError(f'名字为{name}的仓库不存在')
+        return res
+
+    def repository_instances(self, repository_name: str) -> Dict[str, RepositoryInstance]:
+        return self._current_image.repository_instance.get(repository_name, {}).copy()
 
     def repositories(self) -> List[Repository]:
         return list(self._current_image.repository.values()).copy()
@@ -306,89 +310,97 @@ class BruteDatabase(Database):
         self._current_image.repository.pop(name)
         return True
 
-    def is_repository_instance_exists(
-            self,
-            repository: Repository,
-            instance_name: str
-    ) -> bool:
-        return (repository.name, instance_name) in \
-            self._current_image.repository_instance.keys()
+    def is_repository_instance_exists(self, repository_name: str, instance_name: str) -> bool:
+        repository_instances = self._current_image.repository_instance.get(repository_name, None)
+        if repository_instances is None:
+            return False
+        return instance_name in repository_instances.keys()
 
     def new_repository_instance(
             self,
-            repository: Repository,
+            repository_name: str,
             instance_name: str,
             path: str
     ) -> bool:
-        assert not self.is_repository_instance_exists(repository, instance_name) or \
-               DataError(f'{repository.name}中已经存在{instance_name}实例')
-        self._current_image.repository_instance[(repository.name, instance_name)] = \
-            RepositoryInstance(repository, instance_name, path)
+        repository_instance = self._current_image.repository_instance.get(repository_name, None)
+        assert repository_instance is not None, OperationError(f'名字为{repository_name}的仓库不存在')
+        assert instance_name not in repository_instance.keys() or \
+               OperationError(f'{repository_name}中已经存在{instance_name}实例')
+        repository_instance[instance_name] = RepositoryInstance(repository_name, instance_name, path)
         return True
 
-    def update_repository_instance(self, instance: RepositoryInstance) -> bool:
-        found = self._current_image.repository_instance.get(
-            (instance.repository.name, instance.instance_name), None
-        )
-        assert found is not None or DataError(f'未找到{instance.repository.name}仓库的{instance.instance_name}实例')
-        found.path = instance.path
+    def _find_repository_instances(self, repository_name: str) -> Dict[str, RepositoryInstance]:
+        repository = self.find_repository(repository_name)
+        repository_instances = self._current_image.repository_instance.get(repository.name, None)
+        if repository_instances is None:
+            repository_instances = self._current_image.repository_instance[repository.name] = {}
+        return repository_instances
+
+    def update_repository_instance(self, repository_name: str, instance_name: str, path: str) -> bool:
+        repository_instances = self._find_repository_instances(repository_name)
+        assert instance_name in repository_instances.keys(), (
+            OperationError(f'仓库：{repository_name}不存在名为{instance_name}的实例'))
+        repository_instances[instance_name] = RepositoryInstance(repository_name, instance_name, path)
         return True
 
-    def remove_repository_instance(self, instance: RepositoryInstance) -> bool:
-        found = self._current_image.repository_instance.pop(
-            (instance.repository.name, instance.instance_name), None
-        )
-        assert found is None or DataError(f'未找到{instance.repository.name}仓库的{instance.instance_name}实例')
+    def remove_repository_instance(self, repository_name: str, instance_name: str) -> bool:
+        repository_instances = self._find_repository_instances(repository_name)
+        found_instance = repository_instances.get(instance_name, None)
+        assert found_instance is not None, \
+            DataError(f'未找到{repository_name}仓库的{instance_name}实例')
+        repository_instances.pop(instance_name)
         return True
 
-    def query_repository_instance(
-            self,
-            repository: Repository,
-            instance_name: str
-    ) -> RepositoryInstance:
-        found = self._current_image.repository_instance.pop(
-            (repository.name, instance_name), None
-        )
-        assert found is not None or DataError(f'未找到{repository.name}仓库的{instance_name}实例')
-        return found
+    def find_repository_instance(self, repository_name: str, instance_name: str) -> RepositoryInstance:
+        repository_instances = self._find_repository_instances(repository_name)
+        found_instance = repository_instances.get(instance_name, None)
+        assert found_instance is not None, DataError(f'未找到{repository_name}仓库的{instance_name}实例')
+        return found_instance
 
     def _write_new_file_records(self, file_records: List[FileRecord]) -> int:
         image = self._current_image
         for each in file_records:
-            assert each.directory_file_record_id in image.file_record.keys() or \
+            assert each.directory_file_record_id is None or \
+                   each.directory_file_record_id in image.file_record.keys() or \
                    DataError(f'找不到{each}的父目录')
-
             self._new_file_record(each)
         return len(file_records)
 
     def _new_file_record(self, record: FileRecord):
         image = self._current_image
         record.file_record_id = image.next_file_record_id
-        directory_record = image.file_record[record.directory_file_record_id]
-        directory_record.children_id[record.full_name] = record.file_record_id
-        image.file_record[image.next_file_record_id] = image
+        if record.directory_file_record_id is not None:
+            directory_record = image.file_record[record.directory_file_record_id]
+            directory_record.children_id[record.full_name] = record.file_record_id
+        image.file_record[image.next_file_record_id] = record
         image.next_file_record_id += 1
 
     def update_file_records(self, file_records: List[FileRecord]) -> int:
         image = self._current_image
         for each in file_records:
-            assert each.file_record_id in image.file_record.keys() or \
-                   DataError(f'找不到{each}的文件记录')
+            assert each.file_record_id is not None and each.file_record_id in image.file_record.keys(), \
+                DataError(f'找不到{each}的文件记录')
             image.file_record[each.file_record_id] = each
         return len(file_records)
 
-    def repository_file_records(self, repository: Repository) -> List[FileRecord]:
-        root = self._current_image.repository_root[repository.name]
-        res = self._find_file_record(root)
-        assert res[0] == root
+    def _find_file_record(self, file_record_id: int) -> FileRecord:
+        res = self._current_image.file_record.get(file_record_id, None)
+        assert res is not None, OperationError(f'找不到id为{file_record_id}的文件记录')
+        return res
+
+    def repository_file_records(self, repository_name: str) -> List[FileRecord]:
+        root_file_record = self._find_file_record(self._current_image.repository_root[repository_name])
+        res = self._find_directory_file_records(root_file_record)
+        assert res[0].file_record_id == root_file_record.file_record_id
         res.pop(0)
         return res
 
-    def _find_file_record(self, file_record: FileRecord) -> List[FileRecord]:
+    def _find_directory_file_records(self, file_record: FileRecord) -> List[FileRecord]:
         """找到该文件记录下的所有文件记录"""
         res = [file_record]
-        for child in file_record.children_id:
-            res.extend(self._find_file_record(child))
+        for name in sorted(file_record.children_id.keys()):
+            child_id = file_record.children_id[name]
+            res.extend(self._find_directory_file_records(self._find_file_record(child_id)))
         return res
 
     def delete_file_records(self, file_records: List[FileRecord]) -> int:
