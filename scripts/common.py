@@ -98,22 +98,29 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
 
         # 获取当前目录的所有文件信息记录
         db_records = self.db.repository_file_records(repository_instance.repository_name)
-        local_records = repository_instance.get_dir_file_instances(repository_name)
+        local_records = repository_instance.instance_file_records(repository_name)
         if len(db_records) == 0:
             total_size = sum(each.size for each in local_records)
             if self.input_query(
                     f'有{len(local_records)}个文件共{self.human_readable_size(total_size)}，'
                     f'是否计算md5并更新至数据库中？'
             ):
-                created_rows = sum(self.file_md5_computing_transactions(
-                    local_records, self.db._write_new_file_records, dir_id=dir_id))
-                assert created_rows == len(local_records), RunTimeError(
-                    f'在往数据库写入数据后，理应写入{len(local_records)}行记录，但只写入了{created_rows}行'
+                created_records = sum(
+                    self.file_md5_computing_transactions(
+                    local_records,
+                        self.db._write_new_file_records,
+                        dir_id=dir_id
+                    )
+                )
+                assert created_records == len(local_records), RunTimeError(
+                    f'在往数据库写入数据后，理应写入{len(local_records)}行记录，但只写入了{created_records}行'
                 )
             else:
-                created_rows = self.transaction(self.db._write_new_file_records, dir_id=dir_id,
-                                                file_records=local_records)
-            print(f'更新了{created_rows}条记录')
+                created_records = self.transaction(
+                    self.db.new_file_records,
+                    file_records=local_records
+                )
+            print(f'更新了{created_records}条记录')
             return 0
         self._compare_local_records_to_db_records(repository_name, dir_id, local_records, db_records)
         if self.check_empty_dir(repository_name) and self.input_query('检测到存在空目录，是否删除它们？'):

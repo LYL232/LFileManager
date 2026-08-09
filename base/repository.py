@@ -1,8 +1,13 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import List
-from os.path import isdir, join
+from os.path import isdir, join, abspath
 import os
+import time
+from datetime import datetime
+
+from base import FileRecord
+from error import DataError
 
 
 @dataclass(init=False, slots=True)
@@ -71,15 +76,15 @@ class RepositoryInstance:
                 res.append(file)
         return res
 
-    @classmethod
-    def get_dir_file_instances(cls, dir_path: str) -> List[FileInstance]:
+    def instance_file_records(self) -> List[FileRecord]:
         """
-        获取指定路径目录下的所有文件记录
-        :param dir_path: 目录路径
+        获取根路径目录下的所有文件记录
         :return: 该路径下的所有文件对应的文件实例
         """
-        dir_path = abspath(dir_path)
-        file_paths = cls.get_file_paths_of_dir(dir_path)
+        if self.path is None:
+            return []
+        dir_path = abspath(self.path)
+        file_paths = self.get_file_paths_of_dir(dir_path)
         assert all(dir_path in each for each in file_paths)
         res = []
         for each in file_paths:
