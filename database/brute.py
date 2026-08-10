@@ -205,10 +205,8 @@ class BruteDatabase(Database):
                         file.write(f'{instance_name}/{repository_name}/{instance.path}\n')
             with open(main_file_record_path, 'w', encoding='utf-8') as file:
                 for file_record in image.file_record.values():
-                    # file.write(f'{json.dumps(file_record.json_obj)}\n')
                     assert file_record.file_record_id is not None
                     items = (
-                        file_record.repository_name,
                         str(file_record.file_record_id),
                         file_record.name,
                         file_record.suffix,
@@ -304,7 +302,7 @@ class BruteDatabase(Database):
     def delete_repository(self, name: str):
         if name not in self._current_image.repository.keys():
             DataError(f'并未找到名字为{name}的仓库')
-        if any([each.repository_name == name for each in self._current_image.file_record.values()]):
+        if name in self._current_image.repository_root.keys():
             DataError(f'仍存在{name}仓库的文件记录，无法删除')
         self._current_image.repository.pop(name)
         return True

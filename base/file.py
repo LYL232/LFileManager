@@ -21,7 +21,6 @@ class FileRecord:
 
     def __init__(
             self,
-            repository_name: str,
             name: str,
             suffix: str,
             size: int,
@@ -56,7 +55,6 @@ class FileRecord:
     @property
     def copy(self) -> FileRecord:
         return FileRecord(
-            repository_name=self.repository_name,
             name=self.name,
             suffix=self.suffix,
             size=self.size,
@@ -73,7 +71,6 @@ class FileRecord:
     def json_obj(self) -> dict:
         return {
             'file_record_id': self.file_record_id,
-            '': self.repository_name,
             'directory_file_record_id': self.directory_file_record_id,
             'name': self.name,
             'size': self.size,
@@ -119,7 +116,7 @@ class FileRecord:
 
     @property
     def identity(self):
-        return self.repository_name, self.directory_file_record_id, self.name
+        return self.directory_file_record_id, self.name
 
     def __hash__(self):
         return hash(self.identity)

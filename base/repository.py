@@ -95,11 +95,12 @@ class RepositoryInstance:
             date_obj = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
             timestamp = int(time.mktime(date_obj.timetuple()))
             record = FileRecord(
-                path=each.replace(dir_path, ''),
+                repository_name=self.repository_name,
+                name=name,
+                suffix=suffix,
                 size=os.path.getsize(each),
                 modified_time=timestamp,
                 md5='',
-                dir_physical_path=dir_path
             )
             if record.dir_path.startswith('/.lyl232fm/'):
                 continue

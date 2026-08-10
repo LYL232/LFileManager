@@ -98,7 +98,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
 
         # 获取当前目录的所有文件信息记录
         db_records = self.db.repository_file_records(repository_instance.repository_name)
-        local_records = repository_instance.instance_file_records(repository_name)
+        local_records = repository_instance.instance_file_records()
         if len(db_records) == 0:
             total_size = sum(each.size for each in local_records)
             if self.input_query(
