@@ -107,9 +107,8 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
             ):
                 created_records = sum(
                     self.file_md5_computing_transactions(
-                    local_records,
+                        local_records,
                         self.db._write_new_file_records,
-                        dir_id=dir_id
                     )
                 )
                 assert created_records == len(local_records), RunTimeError(
