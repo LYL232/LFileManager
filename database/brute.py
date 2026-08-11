@@ -547,7 +547,7 @@ class BruteDatabase(Database):
             ))
         return res
 
-    def query_file_record_path(self, file_record: FileRecord) -> str:
+    def query_file_record_split_path(self, file_record: FileRecord) -> List[str]:
         image = self._current_image
         res = [file_record.full_name]
         directory_file_record_id = file_record.directory_file_record_id
@@ -556,7 +556,7 @@ class BruteDatabase(Database):
             res.append(directory_file_record.full_name)
             directory_file_record_id = directory_file_record.directory_file_record_id
         res.reverse()
-        return '/' + '/'.join(res)
+        return res
 
 
 class BruteTransaction(Transaction):

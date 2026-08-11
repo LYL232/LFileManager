@@ -321,8 +321,17 @@ class Database(metaclass=ABCMeta):
         """
 
     @abstractmethod
+    def query_file_record_split_path(self, file_record: FileRecord) -> List[str]:
+        """
+        查询文件记录的分割后的路径
+        :param file_record: 文件记录
+        :return: 从仓库根到指定文件的每个目录的名字和文件的名字
+        """
+
     def query_file_record_path(self, file_record: FileRecord) -> str:
         """
-        根据指定的md5值查询所有的文件记录id
+        查询文件记录完整路径
         :param file_record: 文件记录
+        :return: 字符串路径
         """
+        return '/' + ''.join(self.query_file_record_split_path(file_record))

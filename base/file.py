@@ -126,17 +126,3 @@ class FileRecord:
             return False
         return self.identity == other.identity
 
-# class FileInstance:
-#     # 128MB的读取缓存
-#     READ_BUFFER = 128 * 1024 * 1024
-#
-#     def __init__(
-#             self,
-#             repository_instance: RepositoryInstance,
-#             file_record: FileRecord,
-#             md5: str = None
-#     ):
-#         self.repository_instance = repository_instance
-#         self.file_record = file_record
-#         self.md5 = md5 or FileRecord.EMPTY_MD5
-#
