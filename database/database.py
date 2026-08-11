@@ -319,3 +319,10 @@ class Database(metaclass=ABCMeta):
         :param repository_name: 仓库名字
         :return: 文件记录的id列表
         """
+
+    @abstractmethod
+    def query_file_record_path(self, file_record: FileRecord) -> str:
+        """
+        根据指定的md5值查询所有的文件记录id
+        :param file_record: 文件记录
+        """

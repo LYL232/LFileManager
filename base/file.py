@@ -1,7 +1,6 @@
 from __future__ import annotations
 import os
-import hashlib
-from os.path import join
+
 import platform
 import time
 from typing import Dict
@@ -12,7 +11,8 @@ from error import DataError
 
 
 class FileRecord:
-    READ_BUFFER = 128 * 1024 * 1024
+    # 计算md5值时一次性读入的字节大小
+    FILE_MD5_COMPUTE_READ_BUFFER = 128 * 1024 * 1024  # 128M
     __INSTANCE: Dict[int, FileRecord] = {}
 
     """
@@ -44,7 +44,6 @@ class FileRecord:
 
         self.file_record_id = file_record_id
 
-        self.repository_name = repository_name
         self.directory_file_record_id = directory_file_record_id
         self.children_id: Dict[str, int] = {}
         self.name, self.suffix = name, suffix
@@ -141,20 +140,3 @@ class FileRecord:
 #         self.file_record = file_record
 #         self.md5 = md5 or FileRecord.EMPTY_MD5
 #
-    def compute_md5(self) -> str:
-        """
-        计算文件的md5
-        :return: md5
-        """
-        m = hashlib.md5()
-        with open(join(
-                self.repository_instance.path,
-                *(self.file_record.path.split('/')[1:])), 'rb'
-        ) as file:
-            while True:
-                data = file.read(self.READ_BUFFER)
-                if not data:
-                    break
-                m.update(data)
-        self.md5 = m.hexdigest()
-        return self.md5

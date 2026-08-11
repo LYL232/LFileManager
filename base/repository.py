@@ -2,12 +2,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List
 from os.path import isdir, join, abspath
+import hashlib
+from os.path import join
 import os
 import time
 from datetime import datetime
 
 from base import FileRecord
-from error import DataError
+from error import OperationError
 
 
 @dataclass(init=False, slots=True)
@@ -95,7 +97,6 @@ class RepositoryInstance:
             date_obj = datetime.strptime(date, '%Y-%m-%d %H:%M:%S')
             timestamp = int(time.mktime(date_obj.timetuple()))
             record = FileRecord(
-                repository_name=self.repository_name,
                 name=name,
                 suffix=suffix,
                 size=os.path.getsize(each),
@@ -106,3 +107,23 @@ class RepositoryInstance:
                 continue
             res.append(record)
         return res
+
+    def compute_file_record_md5(self, file_record_path: str) -> str:
+        """
+        计算文件记录的md5
+        :param file_record_path: 文件记录路径
+        :return: md5
+        """
+        assert self.path is not None, OperationError(
+            f'仓库{self.repository_name}的{self.instance_name}实例没有注册路径'
+        )
+        m = hashlib.md5()
+        assert file_record_path.startswith('/')
+        file_record_path = file_record_path[1:]
+        with open(join(self.path, *(file_record_path.split('/'))), 'rb') as file:
+            while True:
+                data = file.read(FileRecord.FILE_MD5_COMPUTE_READ_BUFFER)
+                if not data:
+                    break
+                m.update(data)
+        return m.hexdigest()

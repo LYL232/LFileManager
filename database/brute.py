@@ -131,7 +131,6 @@ class BruteDatabase(Database):
                 if directory_file_record_id < 0:
                     directory_file_record_id = None
                 file_record[file_record_id] = FileRecord(
-                    repository_name=repository_name,
                     file_record_id=file_record_id,
                     name=name,
                     suffix=suffix,
@@ -277,8 +276,8 @@ class BruteDatabase(Database):
         record_id = self._current_image.next_file_record_id
         root_record = FileRecord(
             new_repo.name,
-            '', '', 0, time(),
-            file_record_id=self._current_image.next_file_record_id
+            '.root', 0, time(),
+            file_record_id=self._current_image.next_file_record_id,
         )
         self._current_image.repository_root[name] = record_id
         self._current_image.file_record[record_id] = root_record
@@ -547,6 +546,17 @@ class BruteDatabase(Database):
                 child_record, size, md5
             ))
         return res
+
+    def query_file_record_path(self, file_record: FileRecord) -> str:
+        image = self._current_image
+        res = [file_record.full_name]
+        directory_file_record_id = file_record.directory_file_record_id
+        while directory_file_record_id is not None:
+            directory_file_record = image.file_record[directory_file_record_id]
+            res.append(directory_file_record.full_name)
+            directory_file_record_id = directory_file_record.directory_file_record_id
+        res.reverse()
+        return '/' + '/'.join(res)
 
 
 class BruteTransaction(Transaction):

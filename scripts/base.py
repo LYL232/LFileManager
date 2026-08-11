@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from database import DATABASE_CLASS, Database
 from error import ArgumentError, CodingError, RunTimeError, OperationError
-from base import FileRecord
+from base import FileRecord, RepositoryInstance
 
 
 class BaseScript(metaclass=ABCMeta):
@@ -301,7 +301,9 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
 
     @property
     def db(self) -> Database:
-        assert self._db is not None or CodingError(f'请使用 with as 语法使用类{type(self)}或者在构造时传入Database对象')
+        assert self._db is not None, CodingError(
+            f'请使用 with as 语法使用类{self.__class__.__name__}或者在构造时传入Database对象'
+        )
         return self._db
 
     def __enter__(self):
@@ -485,9 +487,15 @@ class FileMD5ComputingScript(DataBaseScript, metaclass=ABCMeta):
     # 计算md5时多少秒写入数据库一次
     MD5_COMPUTING_SAVE_FREQUENCY = 3
 
-    def file_md5_computing_transactions(self, records: List[FileRecord], func, *args, **kwargs) -> list:
+    def file_md5_computing_transactions(
+            self,
+            repository_instance: RepositoryInstance,
+            records: List[FileRecord],
+            func,
+            *args, **kwargs) -> list:
         """
-        分批次地计算文件的MD5值并存入数据库中，防止MD5计算时间太久导致很多计算资源白白浪费
+        分批次地计算文件的MD5值并存入数据库中，防止MD5计算时间太久出异常导致很多计算资源白白浪费
+        :param repository_instance: 仓库实例
         :param records: 需要进行操作的文件记录列表
         :param func: 数据库更新函数
         :param args: 数据库更新函数需要的位置参数
@@ -497,7 +505,8 @@ class FileMD5ComputingScript(DataBaseScript, metaclass=ABCMeta):
         res, batch = [], []
         last_commit_time = time.time()
         for record in tqdm(records, desc='计算文件md5值', disable=len(records) < 5):
-            record.compute_md5()
+
+            record.md5 = repository_instance.compute_file_record_md5(self.db.query_file_record_path(record))
             batch.append(record)
             if time.time() - last_commit_time > self.MD5_COMPUTING_SAVE_FREQUENCY:
                 res.append(self.transaction(func, *args, **kwargs, file_records=batch))
