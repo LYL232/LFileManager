@@ -109,19 +109,19 @@ class Database(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def repository_instances(self, repository_name: str) -> Dict[str, RepositoryInstance]:
-        """
-        一个仓库所关联的实例信息
-        :param repository_name: 仓库名称
-        :return: 没有时返回空列表
-        """
-
-    @abstractmethod
     def delete_repository(self, name: str) -> bool:
         """
         删除一个仓库
         :param name: 仓库名称
         :return: 0表示删除不成功，1表示删除成功
+        """
+
+    @abstractmethod
+    def query_repository_instances(self, repository_name: str) -> Dict[str, RepositoryInstance]:
+        """
+        一个仓库所关联的实例信息
+        :param repository_name: 仓库名称
+        :return: 没有时返回空列表
         """
 
     @abstractmethod
@@ -154,6 +154,15 @@ class Database(metaclass=ABCMeta):
         :param repository_name: 仓库名字
         :param instance_name: 实例名字
         :param path: 物理路径
+        :return: 表示操作是否成功
+        """
+
+    @abstractmethod
+    def reset_repository_instance_path(self, repository_name: str, instance_name: str) -> bool:
+        """
+        修改仓库实例记录，要求存在相同的仓库名和仓库实例名
+        :param repository_name: 仓库名字
+        :param instance_name: 实例名字
         :return: 表示操作是否成功
         """
 

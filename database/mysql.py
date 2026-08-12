@@ -170,7 +170,7 @@ class MysqlDataBase(Database):
                 (name, desc)
             )
 
-    def repository_instances(self, dir_id_or_name: Union[str, id]) -> List[str]:
+    def query_repository_instances(self, dir_id_or_name: Union[str, id]) -> List[str]:
         with self.connection.cursor() as cursor:
             if isinstance(dir_id_or_name, str):
                 cursor.execute(

@@ -102,6 +102,8 @@ class BruteDatabase(Database):
                 items = line.strip().split('/')
                 repository_name, instance_name = items[:2]
                 path = '/'.join(items[2:])
+                if len(path) == 0:
+                    path = None
                 repository_instances = repository_instance.get(repository_name, None)
                 if repository_instances is None:
                     repository_instance[repository_name] = repository_instances = {}
@@ -292,7 +294,7 @@ class BruteDatabase(Database):
         assert res is not None, OperationError(f'名字为{name}的仓库不存在')
         return res
 
-    def repository_instances(self, repository_name: str) -> Dict[str, RepositoryInstance]:
+    def query_repository_instances(self, repository_name: str) -> Dict[str, RepositoryInstance]:
         return self._current_image.repository_instance.get(repository_name, {}).copy()
 
     def repositories(self) -> List[Repository]:
@@ -337,6 +339,13 @@ class BruteDatabase(Database):
         assert instance_name in repository_instances.keys(), (
             OperationError(f'仓库：{repository_name}不存在名为{instance_name}的实例'))
         repository_instances[instance_name] = RepositoryInstance(repository_name, instance_name, path)
+        return True
+
+    def reset_repository_instance_path(self, repository_name: str, instance_name: str) -> bool:
+        repository_instances = self._find_repository_instances(repository_name)
+        instance = repository_instances.get(instance_name, None)
+        assert instance is not None, OperationError(f'仓库：{repository_name}不存在名为{instance_name}的实例')
+        instance.path = None
         return True
 
     def remove_repository_instance(self, repository_name: str, instance_name: str) -> bool:

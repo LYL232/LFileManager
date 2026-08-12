@@ -1,5 +1,5 @@
 from abc import abstractmethod, ABCMeta
-from typing import Union, List, Dict, Tuple, Set, Callable
+from typing import Union, List, Dict, Tuple, Set, Callable, Iterable
 import json
 from json.decoder import JSONDecodeError
 import os
@@ -33,7 +33,8 @@ class BaseScript(metaclass=ABCMeta):
         :param kwargs: 名字参数
         :return: 是否为空
         """
-        assert len(args) == 0 and len(kwargs) == 0, ArgumentError(f'{cls.__name__}收到了额外的运行参数：{args}, {kwargs}')
+        assert len(args) == 0 and len(kwargs) == 0, ArgumentError(
+            f'{cls.__name__}收到了额外的运行参数：{args}, {kwargs}')
         return True
 
     def __enter__(self):
@@ -201,7 +202,7 @@ class BaseScript(metaclass=ABCMeta):
         return res
 
     @classmethod
-    def cmd_ls(cls, cmd: str, outputs: List[str]):
+    def cmd_ls(cls, cmd: str, outputs: Iterable[str]):
         """
         ls命令的处理：询问将字符串列表输出到命令行还是指定文件中
         :param cmd 命令
@@ -213,7 +214,7 @@ class BaseScript(metaclass=ABCMeta):
         cls.write_or_output_lines_to_file(outputs, cmds[1] if len(cmds) == 2 else None)
 
     @staticmethod
-    def write_or_output_lines_to_file(lines: List[str], path: str = None):
+    def write_or_output_lines_to_file(lines: Iterable[str], path: str | None = None):
         """
         将字符串列表输出到指定文件或者标准输出中
         :param lines: 字符串列表
@@ -233,19 +234,6 @@ class BaseScript(metaclass=ABCMeta):
         except Exception as e:
             OperationError(f'无法写入文件：{path}，原因是：{e}')
 
-    @classmethod
-    def file_record_output_lines(cls, file_records: List[FileRecord]) -> List[str]:
-        """
-        将文件记录转换成对应的输出字符串列表
-        :param file_records:
-        :return: 字符串列表
-        """
-        outputs = []
-        for record in file_records:
-            path = f'{record.dir_path[1:]}{record.name}{record.suffix}'
-            outputs.append(f'{path}\t{cls.human_readable_size(record.size)}\t{record.modified_date}')
-        return outputs
-
     @staticmethod
     def _find_maintain_diretory(path: str) -> Union[str, None]:
         """
@@ -264,21 +252,7 @@ class BaseScript(metaclass=ABCMeta):
             current_path = next_path
         return None
 
-    @staticmethod
-    def _find_single_file_in_managements(
-            record, management_paths: List[str]
-    ) -> Tuple[Dict[str, str], Set[str]]:
-        """
-        在其他的管理记录中找到有效的指定文件记录的备份
-        :param record: 需要操作的文件记录
-        :param management_paths: 目录有效的物理路径
-        :return: ([本地路径->其他有效备份的路径], {找不到的路径})
-        """
-        for dp in management_paths:
-            real_path = join(dp, *(record.path.split('/')[1:]))
-            if exists(real_path):
-                return real_path
-        return None
+
 
 
 class DataBaseScript(BaseScript, metaclass=ABCMeta):
@@ -461,27 +435,58 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
         )
         print(f'删除了{deleted}条文件记录')
 
-    def _get_valid_management_paths(self, dir_id: int, except_path: str = None) -> List[str]:
+    def _get_valid_repository_instances_paths(
+            self,
+            repository_name: str,
+            except_instance_names: Set[str]
+    ) -> List[str]:
         """
         获取指定目录有效的物理路径
-        :param dir_id: 目录id
-        :param except_path: 要去除的目录路径（返回的结果将不包含该目录路径），如果是None，则跳过
+        :param repository_name: 仓库实例名字
+        :param except_instance_names: 要去除的实例路径（返回的结果将不包含该实例的路径）
         :return: 其他有效的物理路径
         """
         other_dir_paths = []
-        not_exist_path_tags = []
+        not_exist_path_repository = []
         # 这里假设其他物理位置下的路径的文件都是与数据库一致的
-        for tag, path in self.db.managements(dir_id):
-            if not exists(path):
-                not_exist_path_tags.append(tag)
+        for name, instance in self.db.query_repository_instances(repository_name).items():
+            if name in except_instance_names:
                 continue
-            if except_path is not None and samefile(path, except_path):
+            if instance.path is None or not exists(instance.path):
+                not_exist_path_repository.append(name)
                 continue
             other_dir_paths.append(path)
-        if len(not_exist_path_tags):
-            self.transaction(self.db.reset_management_path, tags=not_exist_path_tags)
+        if len(not_exist_path_repository):
+            self.transaction(self.db.reset_management_path, tags=not_exist_path_repository)
         return other_dir_paths
 
+    def file_record_output_lines(self, file_records: List[FileRecord]) -> List[str]:
+        """
+        将文件记录转换成对应的输出字符串列表
+        :param file_records:
+        :return: 字符串列表
+        """
+        outputs = []
+        for record in file_records:
+            path = f'{self.db.query_file_record_path(record)[1:]}{record.name}{record.suffix}'
+            outputs.append(f'{path}\t{self.human_readable_size(record.size)}\t{record.modified_date}')
+        return outputs
+
+    def _find_single_file_in_repository_instance_paths(
+            self, record: FileRecord, repository_instance_paths: List[str]
+    ) -> str | None:
+        """
+        在其他的管理记录中找到有效的指定文件记录的备份
+        :param record: 需要操作的文件记录
+        :param repository_instance_paths: 目录有效的物理路径
+        :return: [找到的其他文件副本路径]
+        """
+        for instance_path in repository_instance_paths:
+            record_path = self.db.query_file_record_split_path(record)
+            path = join(instance_path, *record_path)
+            if exists(path):
+                return path
+        return None
 
 class FileMD5ComputingScript(DataBaseScript, metaclass=ABCMeta):
     # 计算md5时多少秒写入数据库一次

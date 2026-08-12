@@ -2,7 +2,7 @@
 常规的脚本：经常使用的
 """
 import os
-from os.path import isdir, join, exists, abspath, samefile, dirname
+from os.path import isdir, join, exists, abspath, dirname
 from json.decoder import JSONDecodeError
 from typing import Set, Dict, Tuple, List
 from tqdm import tqdm
@@ -61,7 +61,7 @@ class QueryRepositoryScript(DataBaseScript):
             for directory in self.db.repositories():
                 print(f'仓库：{directory.name}，描述：{directory.desc}')
         else:
-            for name, instance in self.db.repository_instances(name).items():
+            for name, instance in self.db.query_repository_instances(name).items():
                 if instance.path is not None and exists(instance.path):
                     print(f'实例：{name}，路径：{instance.path}')
                 else:
@@ -122,7 +122,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
                 )
             print(f'更新了{created_records}条记录')
             return 0
-        self._compare_local_records_to_db_records(repository_instance, local_records, db_records)
+        self._compare_local_records_to_db_records(repository_instance, path, local_records, db_records)
         if self.check_empty_dir(path) and self.input_query('检测到存在空目录，是否删除它们？'):
             self.remove_empty_dir(path)
         return 0
@@ -187,12 +187,14 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
     def _compare_local_records_to_db_records(
             self,
             repository_instance: RepositoryInstance,
+            instance_directory_path: str,
             local_records: List[FileRecord],
             db_records: List[FileRecord]
     ):
         """
         比较当前文件记录与数据库文件记录，并进行相应动作
         :param repository_instance: 仓库实例
+        :param instance_directory_path: 仓库实例的路径
         :param local_records: 当前文件记录
         :param db_records: 数据库文件记录
         :return:
@@ -208,19 +210,21 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
         deleted_records = self._common_path_records_action(repository_instance, common_path, local_records, db_records)
         # 在上个动作中删除的本地文件记录添加到数据库缺失的文件中
         for each in deleted_records:
-            db_unique.add(each.path)
-        self._unique_db_records_action(repository_instance, db_unique, db_records)
-        self._unique_local_records_action(repository_instance, current_unique, local_records)
+            db_unique.add(self.db.query_file_record_path(each))
+        self._unique_db_records_action(repository_instance, instance_directory_path, db_unique, db_records)
+        self._unique_local_records_action(repository_instance, instance_directory_path, current_unique, local_records)
 
     def _unique_local_records_action(
             self,
             repository_instance: RepositoryInstance,
+            instance_directory_path: str,
             unique_paths: Set[str],
             local_records: Dict[str, FileRecord],
     ):
         """
         本地存在，但数据库不存在的文件记录动作
         :param repository_instance: 仓库实例
+        :param instance_directory_path: 仓库实例的路径
         :param unique_paths: 需要处理的路径集合
         :param local_records: 本地文件记录
         :return:
@@ -248,14 +252,16 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
 
         def action_b():
             for path in unique_paths:
-                self.remove_single_file(join(dir_path, *(path.split('/')[1:])))
+                self.remove_single_file(join(instance_directory_path, *(path.split('/')[1:])))
             return True
 
         def action_c():
             count = 1
             for path in unique_paths:
                 print(f'({count}/{len(unique_paths)})')
-                if self._unique_local_records_query_each_action(dir_path, dir_id, path, local_records[path]):
+                if self._unique_local_records_query_each_action(
+                        repository_instance, instance_directory_path, path, local_records[path]
+                ):
                     break
                 count += 1
             return True
@@ -263,7 +269,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
         def action_remove_all():
             removing_path = []
             for path in unique_paths:
-                real_path = join(dir_path, *(path.split('/')[1:]))
+                real_path = join(instance_directory_path, *(path[1:].split('/')))
                 if not exists(real_path):
                     continue
                 removing_path.append(real_path)
@@ -298,12 +304,14 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
     def _unique_local_records_query_each_action(
             self,
             repository_instance: RepositoryInstance,
+            instance_directory_path: str,
             path: str,
             record: FileRecord
     ):
         """
         对于一个本地独有的文件记录的询问操作
         :param repository_instance: 仓库实例
+        :param instance_directory_path: 仓库实例路径
         :param path: 文件相对路径
         :param record: 文件记录
         :return: None
@@ -327,7 +335,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
             return True
 
         def action_b():
-            self.remove_single_file(join(repository_instance.path, *(path.split('/')[1:])))
+            self.remove_single_file(join(instance_directory_path, *(path[1:].split('/'))))
             return True
 
         def action_abort():
@@ -348,12 +356,14 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
     def _unique_db_records_action(
             self,
             repository_instance: RepositoryInstance,
+            instance_directory_path: str,
             unique_paths: Set[str],
             db_records: Dict[str, FileRecord],
     ):
         """
         数据库存在，但本地不存在的文件记录动作
         :param repository_instance: 仓库实例
+        :param instance_directory_path: 仓库实例路径
         :param unique_paths: 需要处理的路径集合
         :param db_records: 数据库文件记录
         :return:
@@ -389,14 +399,16 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
 
         def action_b():
             file_records = [db_records[path] for path in unique_paths]
-            self._unique_db_records_copy_from_others(repository_instance, file_records)
+            self._unique_db_records_copy_from_others(repository_instance, instance_directory_path, file_records)
             return True
 
         def action_c():
             count = 1
             for path in unique_paths:
                 print(f'({count}/{len(unique_paths)})')
-                if self._unique_db_records_query_each_action(repository_instance, path, db_records[path]):
+                if self._unique_db_records_query_each_action(
+                        repository_instance, instance_directory_path, path, db_records[path]
+                ):
                     break
                 count += 1
             return True
@@ -420,6 +432,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
     def _unique_db_records_query_each_action(
             self,
             repository_instance: RepositoryInstance,
+            instance_directory_path: str,
             path: str,
             record: FileRecord
     ) -> bool:
@@ -428,7 +441,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
         abort = False
 
         def action_a():
-            assert record.file_id is not None, CodingError('数据库中的文件记录中的文件id不应该为None')
+            assert record.file_record_id is not None, CodingError('数据库中的文件记录中的文件id不应该为None')
             if record.md5 == FileRecord.EMPTY_MD5:
                 if self.input_query('将删除文件记录在数据库中的记录，是否继续？'):
                     self._query_safely_delete_file_records([record])
@@ -441,7 +454,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
             return True
 
         def action_b():
-            self._unique_db_records_copy_from_others(repository_instance, [record])
+            self._unique_db_records_copy_from_others(repository_instance, instance_directory_path, [record])
             return True
 
         def action_abort():
@@ -460,50 +473,60 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
         return abort
 
     def _find_file_in_other_managements(
-            self, dir_path: str, dir_id: int, records: List[FileRecord]
+            self,
+            repository_instance: RepositoryInstance,
+            instance_directory_path: str,
+            records: List[FileRecord]
     ) -> Tuple[Dict[str, str], Set[str]]:
         """
         在其他的管理记录中找到有效的指定文件记录的备份
-        :param dir_path: 正在操作的目录路径
-        :param dir_id: 目录id
+        :param repository_instance: 仓库实例
+        :param instance_directory_path: 仓库实例路径
         :param records: 需要操作的文件记录列表
         :return: ([本地路径->其他有效备份的路径], {找不到的路径})
         """
-        other_dir_paths = self._get_valid_management_paths(dir_id, except_path=dir_path)
+        other_dir_paths = self._get_valid_repository_instances_paths(
+            repository_instance.repository_name, except_instance_names={repository_instance.instance_name}
+        )
 
         found_file_paths, not_found_paths = {}, set()
         # 尝试寻找所有的文件路径
         for record in records:
-            path = record.path
-            found = self._find_single_file_in_managements(record, other_dir_paths)
-            local_real_path = join(dir_path, *(path.split('/')[1:]))
+            path = self.db.query_file_record_split_path(record)
+            found = self._find_single_file_in_repository_instance_paths(record, other_dir_paths)
+            local_real_path = join(instance_directory_path, *path)
             if found is None:
+                path = '/' + '/'.join(path)
                 not_found_paths.add(path)
             else:
                 found_file_paths[local_real_path] = found
         return found_file_paths, not_found_paths
 
     def _unique_db_records_copy_from_others(
-            self, repository_instance: RepositoryInstance, records: List[FileRecord]
+            self,
+            repository_instance: RepositoryInstance,
+            instance_directory_path: str,
+            records: List[FileRecord]
     ):
         """
         数据库有但本地缺失的文件记录，采取从其他位置复制而来的动作
         :param repository_instance: 仓库实例
+        :param instance_directory_path: 仓库实例路径
         :param records: 需要处理的文件记录
         :return: 没法找到物理位置的文件记录
         """
         other_dir_paths = []
-        not_exist_path_tags = []
+        not_exist_path_names = []
         # 这里假设其他物理位置下的路径的文件都是与数据库一致的
-        for tag, path in self.db.managements(dir_id):
-            if not exists(path):
-                not_exist_path_tags.append(tag)
+        for name, other_instance in self.db.query_repository_instances(repository_instance.repository_name).items():
+            if name == repository_instance.instance_name:
                 continue
-            if samefile(path, dir_path):
+            if other_instance.path is None or not exists(other_instance.path):
+                not_exist_path_names.append(name)
                 continue
-            other_dir_paths.append(path)
-        if len(not_exist_path_tags):
-            self.transaction(self.db.reset_management_path, tags=not_exist_path_tags)
+            other_dir_paths.append(other_instance.path)
+        if len(not_exist_path_names):
+            self.transaction(self.db.reset_management_path, tags=not_exist_path_names)
 
         found_file_paths, not_found_paths = self._find_file_in_other_managements(
             dir_path, dir_id, records
@@ -680,6 +703,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
     def _common_path_conflict_query_each_action(
             self,
             repository_instance: RepositoryInstance,
+            instance_directory_path: str,
             path: str,
             local_record: FileRecord, db_record: FileRecord
     ):
@@ -700,14 +724,18 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
 
         def action_b():
             nonlocal deleted_local_record
-            if self.remove_single_file(join(dir_path, *(local_record.path.split('/')[1:]))):
+            if self.remove_single_file(join(instance_directory_path, *(
+                    self.db.query_common_size_without_md5_files(local_record)))):
                 deleted_local_record = True
             return True
 
         def action_c():
-            other_dir_paths = self._get_valid_management_paths(dir_id, except_path=dir_path)
+            other_dir_paths = self._get_valid_repository_instances_paths(
+                repository_instance.repository_name, {repository_instance.instance_name}
+            )
             real_split_path = (path.split('/')[1:])
-            file_other_real_path = self._find_single_file_in_managements(local_record, other_dir_paths)
+            file_other_real_path = self._find_single_file_in_repository_instance_paths(
+                local_record, other_dir_paths)
             file_real_path = join(dir_path, *real_split_path)
             if file_other_real_path is not None:
                 if not self.input_query(
@@ -877,7 +905,7 @@ class QueryRedundantFileScript(FileMD5ComputingScript):
 
             found_records, not_found_records = [], []
             for dir_id, records in dir_id2records.items():
-                dir_paths = self._get_valid_management_paths(dir_id)
+                dir_paths = self._get_valid_repository_instances_paths(dir_id)
                 # 尝试寻找所有的文件路径
                 for record in records:
                     found = False
