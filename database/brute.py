@@ -421,8 +421,8 @@ class BruteDatabase(Database):
     def all_repositories(self) -> List[Repository]:
         return list(self._current_image.repository.values())
 
-    def query_common_size_without_md5_files(self, file_records: List[FileRecord]) \
-            -> Dict[int, List[FileRecord]]:
+    def query_common_size_without_md5_files(self) -> Dict[int, List[FileRecord]]:
+        file_records = [each for each in self.all_file_records() if each.md5 == FileRecord.EMPTY_MD5]
         size_classified = {}
         for record in file_records:
             if record.directory_file_record_id is None:

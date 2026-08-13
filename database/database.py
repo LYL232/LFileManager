@@ -246,11 +246,10 @@ class Database(metaclass=ABCMeta):
         """
 
     @abstractmethod
-    def query_common_size_without_md5_files(self, file_records: List[FileRecord]) \
+    def query_common_size_without_md5_files(self) \
             -> Dict[int, List[FileRecord]]:
         """
         在所给的文件记录里查询所有拥有相同大小的缺失md5的文件记录
-        :param file_records: 文件记录
         :return: [size] -> [file_record]
         """
 

@@ -207,9 +207,12 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
         current_unique = current_paths - db_file_path
         db_unique = db_file_path - current_paths
 
-        deleted_records = self._common_path_records_action(repository_instance, common_path, local_records, db_records)
-        # 在上个动作中删除的本地文件记录添加到数据库缺失的文件中
-        for each in deleted_records:
+        deleted_local_records = self._common_path_records_action(
+            repository_instance, instance_directory_path,
+            common_path, local_records, db_records
+        )
+        # 在上个动作中删除的本地文件记录添加到数据库独有的文件中
+        for each in deleted_local_records:
             db_unique.add(self.db.query_file_record_path(each))
         self._unique_db_records_action(repository_instance, instance_directory_path, db_unique, db_records)
         self._unique_local_records_action(repository_instance, instance_directory_path, current_unique, local_records)
@@ -566,6 +569,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
     def _common_path_records_action(
             self,
             repository_instance: RepositoryInstance,
+            instance_directory_path: str,
             common_path: Set[str],
             local_records: Dict[str, FileRecord],
             db_records: Dict[str, FileRecord]
@@ -598,7 +602,8 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
         self._common_path_match_without_db_md5_action(repository_instance, match_wo_md5)
         conflict.update(self._common_path_match_with_db_md5_action(match_with_md5))
 
-        return self._common_path_conflict_action(repository_instance, conflict)
+        return self._common_path_conflict_action(
+            repository_instance, instance_directory_path, conflict)
 
     def _common_path_conflict_action(
             self,
@@ -609,17 +614,11 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
         """
         拥有相同路径的本地文件记录与数据库文件记录相冲突的文件记录对
         :param repository_instance: 仓库实例
-        :param instance_directory_path: 仓库实例
+        :param instance_directory_path: 仓库实例路径
         :param path2records: 路径到记录对的映射
         :return: 如果删除了本地文件，则返回这些被删除的文件记录
         """
         deleted_records = []
-        assert repository_instance.path is not None, \
-            DataError(
-                f'仓库{repository_instance.repository_name}的实例'
-                f':{repository_instance.instance_name}没有有效的物理路径'
-            )
-        directory_physical_path: str = repository_instance.path
 
         if len(path2records) == 0:
             return deleted_records
@@ -642,7 +641,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
         def action_b():
             for local_record, _ in path2records.values():
                 local_record_path = self.db.query_file_record_split_path(local_record)
-                if self.remove_single_file(join(directory_physical_path, *local_record_path)):
+                if self.remove_single_file(join(instance_directory_path, *local_record_path)):
                     deleted_records.append(local_record)
             return True
 
@@ -651,7 +650,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
             for path, (local, db) in path2records.items():
                 print(f'({count}/{len(path2records)})')
                 abort, deleted = self._common_path_conflict_query_each_action(
-                    repository_instance, in, path, local, db
+                    repository_instance, instance_directory_path, path, local, db
                 )
                 if deleted:
                     deleted_records.append(local)
@@ -677,7 +676,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
             removing_records = []
             for local_record, _ in path2records.values():
                 real_path = join(
-                    directory_physical_path,
+                    instance_directory_path,
                     *self.db.query_file_record_split_path(local_record)
                 )
                 if not exists(real_path):
@@ -716,7 +715,8 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
             repository_instance: RepositoryInstance,
             instance_directory_path: str,
             path: str,
-            local_record: FileRecord, db_record: FileRecord
+            local_record: FileRecord,
+            db_record: FileRecord
     ):
         output = path
         if local_record.size != db_record.size:
@@ -735,8 +735,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
 
         def action_b():
             nonlocal deleted_local_record
-            if self.remove_single_file(join(instance_directory_path, *(
-                    self.db.query_common_size_without_md5_files(local_record)))):
+            if self.transaction(self.db.update_file_records, file_records=[local_record]) == 1:
                 deleted_local_record = True
             return True
 
@@ -747,7 +746,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
             real_split_path = (path.split('/')[1:])
             file_other_real_path = self._find_single_file_in_repository_instance_paths(
                 local_record, other_dir_paths)
-            file_real_path = join(dir_path, *real_split_path)
+            file_real_path = join(instance_directory_path, *real_split_path)
             if file_other_real_path is not None:
                 if not self.input_query(
                         f'将删除：{file_real_path}，并复制{file_other_real_path}到被删除文件的位置，是否继续？'
@@ -767,8 +766,8 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
         self.query_actions(
             f'请问对上述冲突记录需要作何处理？',
             {
-                'a': ('以本地文件记录覆盖数据库中的记录并计算md5值', action_a),
-                'b': ('以本地文件记录覆盖数据库中的记录但不计算md5值', action_b),
+                'a': ('以本地文件记录覆盖数据库中的记录并重新计算md5值', action_a),
+                'b': ('以本地文件记录覆盖数据库中的记录但不重新计算md5值', action_b),
                 'c': ('删除本地的文件，并尝试从其他物理位置复制该文件', action_c),
                 'abort': ('不做改变并结束逐一询问', action_abort),
             }
