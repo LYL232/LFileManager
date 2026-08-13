@@ -525,11 +525,18 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
                 not_exist_path_names.append(name)
                 continue
             other_dir_paths.append(other_instance.path)
-        if len(not_exist_path_names):
-            self.transaction(self.db.reset_management_path, tags=not_exist_path_names)
+        if len(not_exist_path_names) > 0:
+            self.transaction(
+                lambda: (
+                    self.db.reset_repository_instance_path(
+                        repository_instance.repository_name,
+                        instance_name
+                    ) for instance_name in not_exist_path_names
+                )
+            )
 
         found_file_paths, not_found_paths = self._find_file_in_other_managements(
-            dir_path, dir_id, records
+            repository_instance, instance_directory_path, records
         )
 
         if len(found_file_paths) > 0:
@@ -596,11 +603,13 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
     def _common_path_conflict_action(
             self,
             repository_instance: RepositoryInstance,
+            instance_directory_path: str,
             path2records: Dict[str, Tuple[FileRecord, FileRecord]]
     ) -> List[FileRecord]:
         """
         拥有相同路径的本地文件记录与数据库文件记录相冲突的文件记录对
         :param repository_instance: 仓库实例
+        :param instance_directory_path: 仓库实例
         :param path2records: 路径到记录对的映射
         :return: 如果删除了本地文件，则返回这些被删除的文件记录
         """
@@ -641,7 +650,9 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
             count = 1
             for path, (local, db) in path2records.items():
                 print(f'({count}/{len(path2records)})')
-                abort, deleted = self._common_path_conflict_query_each_action(repository_instance, path, local, db)
+                abort, deleted = self._common_path_conflict_query_each_action(
+                    repository_instance, in, path, local, db
+                )
                 if deleted:
                     deleted_records.append(local)
                 if abort:
