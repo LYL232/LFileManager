@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 from database import DATABASE_CLASS, Database
 from error import ArgumentError, CodingError, RunTimeError, OperationError
-from base import FileRecord, RepositoryInstance
+from base import FileRecord, RepositoryInstance, Repository
 
 
 class BaseScript(metaclass=ABCMeta):
@@ -235,7 +235,7 @@ class BaseScript(metaclass=ABCMeta):
             OperationError(f'无法写入文件：{path}，原因是：{e}')
 
     @staticmethod
-    def _find_maintain_diretory(path: str) -> Union[str, None]:
+    def _find_maintain_directory(path: str) -> Union[str, None]:
         """
         从一个路径开始往上查找.lyl232fm目录
         :param path: 路径
@@ -299,29 +299,28 @@ class DataBaseScript(BaseScript, metaclass=ABCMeta):
             transaction.rollback()
             raise e
 
-    def get_directory_id_by_name_or_local(self, name: str = None):
+    def get_repository_by_name_or_local(self, name: str | None = None) -> Repository:
         """
         通过输入的name参数或者本地的.lyl232fm文件夹里的信息获取目录id
-        :param name: 目录名字
+        :param name: 仓库名字
         :return: 目录id如果获取不到会抛出异常
         """
         self.init_db_if_needed()
         if name is None:
             try:
-                name = self._load_instance_info(self._find_maintain_diretory('.'))['name']
+                name = self._load_instance_info(self._find_maintain_directory('.'))['repository']
             except (JSONDecodeError, FileNotFoundError) as e:
                 print(e)
                 raise OperationError(f'请指定查询的目录名字')
-        dir_id = self.db.repository_id(name)
-        assert dir_id is not None, OperationError(f'目录名字{name}不存在于数据库中，无法操作')
-        return dir_id
+
+        return self.db.find_repository(name)
 
     @classmethod
     def query_actions(
             cls,
             prompt: str,
-            exact_response_actions: Dict[str, Tuple[str, callable]] = None,
-            cmd_response_actions: Dict[str, Tuple[str, str, callable]] = None
+            exact_response_actions: Dict[str, Tuple[str, Callable]] | None = None,
+            cmd_response_actions: Dict[str, Tuple[str, str, Callable]] | None = None
     ):
         """
         询问用户并根据回应执行动作

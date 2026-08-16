@@ -138,7 +138,7 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
 
         :return: 目录id
         """
-        fm_dir = self._find_maintain_diretory(path)
+        fm_dir = self._find_maintain_directory(path)
         if fm_dir is None:
             # fm_dir不存在
             assert repository_name is not None, OperationError(
@@ -729,7 +729,11 @@ class MakeRepositoryInstanceScript(FileMD5ComputingScript):
         deleted_local_record = False
 
         def action_a():
-            updated = sum(self.file_md5_computing_transactions([local_record], self.db.update_file_records))
+            updated = sum(self.file_md5_computing_transactions(
+                repository_instance,
+                [local_record],
+                self.db.update_file_records
+            ))
             print(f'更新了{updated}条数据库记录')
             return True
 
@@ -865,7 +869,7 @@ class CancelManagementScript(SingleTransactionScript):
 
 
 class QueryFileRecordScript(DataBaseScript):
-    def __call__(self, name: str = None, write_path: str = None, *args) -> int:
+    def __call__(self, name: str | None = None, write_path: str | None = None, *args) -> int:
         """
         查询所有被管理的目录的脚本
         :param name: 目录名字，如果为空，则从当前目录下的.lyl232fm的信息获取
@@ -874,8 +878,8 @@ class QueryFileRecordScript(DataBaseScript):
         """
         self.check_empty_args(*args)
         self.init_db_if_needed()
-        dir_id = self.get_directory_id_by_name_or_local(name)
-        outputs = self.file_record_output_lines(self.db.repository_file_records(dir_id))
+        repository = self.get_repository_by_name_or_local(name)
+        outputs = self.file_record_output_lines(self.db.repository_file_records(repository.name))
         self.write_or_output_lines_to_file(outputs, write_path)
         return 0
 
@@ -1068,7 +1072,7 @@ class QuerySizeScript(DataBaseScript):
         :return: 0表示执行正常
         """
         self.check_empty_args(*args)
-        print(self.human_readable_size(self.db.query_repository_size(self.get_directory_id_by_name_or_local(name))))
+        print(self.human_readable_size(self.db.query_repository_size(self.get_repository_by_name_or_local(name))))
         return 0
 
 
